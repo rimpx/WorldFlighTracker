@@ -56,3 +56,16 @@
     }
   ]
 }
+
+## Input 3:
+{
+  "email": "giulia.bianchi@example.com",
+  "password": "passSBAGLIATA"
+}
+
+## Output 3:
+{
+  "errore": "Email o password non corretti"
+}
+
+
