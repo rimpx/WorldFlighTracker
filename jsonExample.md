@@ -5,8 +5,8 @@
 }
 
 ## Output:
-{
-  "nome": "Mario",
+{ \\
+  "nome": "Mario", \\
   "cognome": "Rossi",
   "data_di_nascita": "1985-03-12",
   "voli_prenotati": [
