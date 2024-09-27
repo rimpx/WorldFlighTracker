@@ -28,13 +28,13 @@
 }
 
 
-## Input:
+## Input 2:
 {
   "email": "giulia.bianchi@example.com",
   "password": "securePass!456"
 }
 
-## Output:
+## Output 2:
 {
   "nome": "Giulia",
   "cognome": "Bianchi",
