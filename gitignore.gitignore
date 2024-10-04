@@ -1,0 +1,21 @@
+# Evita di includere la cartella node_modules
+node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+
+# Directory di output
+dist/
+build/
+
+# Altri files di sistema (opzionale, dipende dalle tue esigenze)
+.DS_Store
+Thumbs.db
+
+# Evitare le cartelle coverage generate dai test
+coverage/
