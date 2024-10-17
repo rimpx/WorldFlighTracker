@@ -95,4 +95,4 @@ WorldFlightTracker is a platform that allows users to monitor flight information
 
 ## Diagramma
 
-![Diagramma](./diagramma.svj)
+![Diagramma](./diagramma.svg)
