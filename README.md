@@ -92,3 +92,7 @@ WorldFlightTracker is a platform that allows users to monitor flight information
 
 2. **Normative sui viaggi e aviazione**:
    - Considerare normative aeroportuali e di volo che possono variare a seconda della regione o del paese.
+
+## Diagramma
+
+![Diagramma](./diagramma.svj)
