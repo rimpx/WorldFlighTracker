@@ -1,127 +1,121 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-const fs = require('fs').promises; 
-
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcrypt');
+const cors = require('cors'); // Importa cors
 const app = express();
+const port = process.env.PORT || 3000;
+const saltRounds = 10; // Numero di round per l'hashing della password
 
-app.use(bodyParser.json());
+// Abilita CORS per tutte le rotte
+app.use(cors()); // Abilita il CORS per tutte le rotte
 
-app.post('/login', async (req, res) => {
-    const { username, password } = req.body;
-    console.log(`Richiesta di login per l'utente ${username}`);
+// Middleware per analizzare il corpo delle richieste in formato JSON
+app.use(express.json());
 
-    try {
-        const data = await fs.readFile('utenti.json', 'utf8');
-        const utenti = JSON.parse(data);
-        const user = utenti.find(u => u.username === username && u.password === password);
-        
-        if (user) {
-            res.status(200).json({ message: "Login effettuato con successo" });
-        } else {
-            res.status(401).json({ message: "Credenziali non valide" });
-        }
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Errore durante la lettura del file o parsing" });
+// Connettersi al database SQLite
+let db = new sqlite3.Database('./database.db', (err) => {
+    if (err) {
+        console.error('Errore durante la connessione al database:', err.message);
+    } else {
+        console.log('Connesso al database degli utenti.');
     }
 });
 
-app.get('/api/utenti', async (req, res) => {
-    try {
-        const data = await fs.readFile('utenti.json', 'utf8');
-        const utenti = JSON.parse(data);
-        res.status(200).json(utenti);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Errore durante la lettura del file" });
-    }
-});
+// Creazione della tabella 'utenti' se non esiste già
+db.run(`CREATE TABLE IF NOT EXISTS utenti (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nome TEXT NOT NULL,
+  cognome TEXT NOT NULL,
+  eta INTEGER NOT NULL CHECK(eta >= 16),
+  email TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL,
+  aeroporto_preferenza TEXT NOT NULL
+)`);
 
 app.post('/register', async (req, res) => {
-    const { username, password } = req.body;
+    const { nome, cognome, eta, email, password, aeroporto_preferenza } = req.body;
 
-    if (!username || !password) {
-        res.status(400).json({ message: "Username e password sono richiesti" });
-        return;
+    // Validazioni di base
+    if (!nome || !cognome || !eta || !email || !password || !aeroporto_preferenza) {
+        return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
+    }
+    if (eta < 16) {
+        return res.status(400).json({ error: 'L\'età minima è di 16 anni' });
     }
 
     try {
-        const data = await fs.readFile('utenti.json', 'utf8');
-        const utenti = JSON.parse(data);
-        
-        const userExists = utenti.find(u => u.username === username);
-        if (userExists) {
-            res.status(409).json({ message: "L'utente esiste già" });
-            return;
+        // Hash della password
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+        // Query per inserire il nuovo utente nel database
+        const query = `INSERT INTO utenti (nome, cognome, eta, email, password, aeroporto_preferenza)
+                     VALUES (?, ?, ?, ?, ?, ?)`;
+        db.run(query, [nome, cognome, eta, email, hashedPassword, aeroporto_preferenza], function (err) {
+            if (err) {
+                return res.status(500).json({ error: 'Errore durante la registrazione: ' + err.message });
+            }
+            res.status(201).json({ message: 'Utente registrato con successo', id: this.lastID });
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Errore durante l\'hashing della password' });
+    }
+});
+
+// Route per il login di un utente
+app.post('/login', (req, res) => {
+    const { email, password } = req.body;
+
+    // Validazioni di base
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email e password sono obbligatori' });
+    }
+
+    // Query per trovare l'utente nel database
+    const query = `SELECT * FROM utenti WHERE email = ?`;
+    db.get(query, [email], async (err, user) => {
+        if (err) {
+            return res.status(500).json({ error: 'Errore durante la ricerca dell\'utente: ' + err.message });
+        }
+        if (!user) {
+            return res.status(404).json({ error: 'Utente non trovato' });
         }
 
-        utenti.push({ username, password });
-        await fs.writeFile('utenti.json', JSON.stringify(utenti, null, 2));
-
-        res.status(201).json({ message: "Registrazione avvenuta con successo" });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Errore durante la registrazione" });
-    }
-});
-
-app.put('/edit', async (req, res) => {
-    const { username, newPassword } = req.body;
-
-    if (!username || !newPassword) {
-        res.status(400).json({ message: "Username e nuova password sono richiesti" });
-        return;
-    }
-
-    try {
-        const data = await fs.readFile('utenti.json', 'utf8');
-        const utenti = JSON.parse(data);
-        
-        const userIndex = utenti.findIndex(u => u.username === username);
-        if (userIndex === -1) {
-            res.status(404).json({ message: "Utente non trovato" });
-            return;
+        // Verifica della password
+        const passwordMatch = await bcrypt.compare(password, user.password);
+        if (!passwordMatch) {
+            return res.status(401).json({ error: 'Credenziali non valide' });
         }
 
-        utenti[userIndex].password = newPassword;
-        await fs.writeFile('utenti.json', JSON.stringify(utenti, null, 2));
-
-        res.status(200).json({ message: "Password aggiornata con successo" });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Errore durante l'aggiornamento della password" });
-    }
+        // Login riuscito, inviamo una risposta con i dati dell'utente (escludendo la password)
+        res.json({
+            message: 'Login riuscito',
+            user: {
+                id: user.id,
+                nome: user.nome,
+                email: user.email,
+                aeroporto_preferenza: user.aeroporto_preferenza
+            }
+        });
+    });
 });
 
-app.delete('/delete', async (req, res) => {
-    const { username } = req.body;
-
-    if (!username) {
-        res.status(400).json({ message: "Username è richiesto" });
-        return;
-    }
-
-    try {
-        const data = await fs.readFile('utenti.json', 'utf8');
-        let utenti = JSON.parse(data);
-
-        const newUsers = utenti.filter(u => u.username !== username);
-        
-        if (newUsers.length === utenti.length) {
-            res.status(404).json({ message: "Utente non trovato" });
-            return;
+// Gestione della chiusura del database in modo sicuro
+const gracefulShutdown = () => {
+    db.close((err) => {
+        if (err) {
+            console.error('Errore durante la chiusura del database:', err.message);
+        } else {
+            console.log('Connessione al database chiusa.');
         }
+        process.exit(0);
+    });
+};
+// Eventi di interruzione del sistema (SIGINT, SIGTERM) per la chiusura sicura del database
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
 
-        await fs.writeFile('utenti.json', JSON.stringify(newUsers, null, 2));
-
-        res.status(200).json({ message: "Utente eliminato con successo" });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Errore durante l'eliminazione dell'utente" });
-    }
+// Avvio del server
+app.listen(port, () => {
+    console.log(`Server API in esecuzione su http://localhost:${port}`);
 });
 
-const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`Server in esecuzione sulla porta ${PORT}`);
-});
