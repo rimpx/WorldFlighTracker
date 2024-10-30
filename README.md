@@ -100,4 +100,4 @@ WorldFlightTracker utilizza diverse tecnologie per garantire l’efficienza e la
 
 ## Diagramma
 
-
+![Diagramma](./diagramma.svg)
