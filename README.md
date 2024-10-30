@@ -122,6 +122,8 @@ L'API di **WorldFlightTracker** consente la registrazione e il login degli utent
     "aeroporto_preferenza": "stringa"
   }
 
+#### **Endpoint di Login**
+
 - **URL**: `/login`
 - **Metodo**: `GET`
 - **Descrizione**: Permette a un utente registrato di effettuare il login confrontando la password inserita con quella hashata nel database.
