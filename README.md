@@ -101,3 +101,33 @@ WorldFlightTracker utilizza diverse tecnologie per garantire l’efficienza e la
 ## Diagramma
 
 ![Diagramma](./diagram.svg)
+
+### Endpoint dell'API
+
+L'API di **WorldFlightTracker** consente la registrazione e il login degli utenti, gestendo le informazioni di base degli utenti come nome, cognome, età, email, password e aeroporto di preferenza. Gli endpoint includono validazioni dei dati e gestiscono l'autenticazione tramite hashing della password con bcrypt.
+
+#### **Endpoint di Registrazione**
+
+- **URL**: `/register`
+- **Metodo**: `POST`
+- **Descrizione**: Consente la registrazione di un nuovo utente. Inserisce i dati dell'utente nel database, inclusa una password hashata.
+- **Corpo della richiesta** (JSON):
+  ```json
+  {
+    "nome": "stringa",
+    "cognome": "stringa",
+    "eta": numero,
+    "email": "stringa",
+    "password": "stringa",
+    "aeroporto_preferenza": "stringa"
+  }
+
+- **URL**: `/login`
+- **Metodo**: `GET`
+- **Descrizione**: Permette a un utente registrato di effettuare il login confrontando la password inserita con quella hashata nel database.
+- **Corpo della richiesta** (JSON):
+  ```json
+  {
+  "email": "stringa",
+  "password": "stringa"
+  }
