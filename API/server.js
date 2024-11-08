@@ -41,13 +41,13 @@ app.post('/register', async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    const query = `INSERT INTO utenti (nome, cognome, eta, email, password, aeroporto_>
+    const query = `INSERT INTO utenti (nome, cognome, eta, email, password, aeroporto_preferenza) 
                    VALUES (?, ?, ?, ?, ?, ?)`;
-    db.run(query, [nome, cognome, eta, email, hashedPassword, aeroporto_preferenza], f>
+    db.run(query, [nome, cognome, eta, email, hashedPassword, aeroporto_preferenza], function(err) {
       if (err) {
-        return res.status(500).json({ error: 'Errore durante la registrazione: ' + err>
+        return res.status(500).json({ error: 'Errore durante la registrazione: ' + err.message });
       }
-      res.status(201).json({ message: 'Utente registrato con successo', id: this.lastI>
+      res.status(201).json({ message: 'Utente registrato con successo', id: this.lastID });
     });
   } catch (error) {
     res.status(500).json({ error: 'Errore durante l\'hashing della password' });
@@ -64,7 +64,7 @@ app.post('/login', (req, res) => {
   const query = `SELECT * FROM utenti WHERE email = ?`;
   db.get(query, [email], async (err, user) => {
     if (err) {
-      return res.status(500).json({ error: 'Errore durante la ricerca dell\'utente: ' >
+      return res.status(500).json({ error: 'Errore durante la ricerca dell\'utente: ' + err.message });
     }
     if (!user) {
       return res.status(404).json({ error: 'Utente non trovato' });
