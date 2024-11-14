@@ -1,15 +1,17 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcrypt');
-const cors = require('cors'); // Importa cors
+const cors = require('cors');
+const swaggerJsDoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
 const app = express();
 const port = process.env.PORT || 3000;
-const saltRounds = 10; // Numero di round per l'hashing della password
+const saltRounds = 10;
 
-app.use(cors()); 
-
+app.use(cors());
 app.use(express.json());
 
+// Configurazione del database SQLite
 let db = new sqlite3.Database('./database.db', (err) => {
   if (err) {
     console.error('Errore durante la connessione al database:', err.message);
@@ -28,6 +30,61 @@ db.run(`CREATE TABLE IF NOT EXISTS utenti (
   aeroporto_preferenza TEXT NOT NULL
 )`);
 
+// Configurazione Swagger
+const swaggerOptions = {
+  swaggerDefinition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'User Management API',
+      version: '1.0.0',
+      description: 'API per la gestione degli utenti e autenticazione',
+    },
+    servers: [
+      {
+        url: 'http://localhost:3000',
+      },
+    ],
+  },
+  apis: ['./server.js'], // Specifica il file contenente le route dell'API
+};
+
+const swaggerDocs = swaggerJsDoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+
+// Route di registrazione
+/**
+ * @swagger
+ * /register:
+ *   post:
+ *     summary: Registra un nuovo utente
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               nome:
+ *                 type: string
+ *               cognome:
+ *                 type: string
+ *               eta:
+ *                 type: integer
+ *                 minimum: 16
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               aeroporto_preferenza:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Utente registrato con successo
+ *       400:
+ *         description: Tutti i campi sono obbligatori o età minima non rispettata
+ *       500:
+ *         description: Errore durante la registrazione
+ */
 app.post('/register', async (req, res) => {
   const { nome, cognome, eta, email, password, aeroporto_preferenza } = req.body;
 
@@ -40,9 +97,7 @@ app.post('/register', async (req, res) => {
 
   try {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    const query = `INSERT INTO utenti (nome, cognome, eta, email, password, aeroporto_preferenza) 
-                   VALUES (?, ?, ?, ?, ?, ?)`;
+    const query = `INSERT INTO utenti (nome, cognome, eta, email, password, aeroporto_preferenza) VALUES (?, ?, ?, ?, ?, ?)`;
     db.run(query, [nome, cognome, eta, email, hashedPassword, aeroporto_preferenza], function(err) {
       if (err) {
         return res.status(500).json({ error: 'Errore durante la registrazione: ' + err.message });
@@ -54,6 +109,33 @@ app.post('/register', async (req, res) => {
   }
 });
 
+// Route di login
+/**
+ * @swagger
+ * /login:
+ *   post:
+ *     summary: Effettua il login di un utente
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login riuscito
+ *       400:
+ *         description: Email e password sono obbligatori
+ *       404:
+ *         description: Utente non trovato
+ *       500:
+ *         description: Errore durante la ricerca dell'utente
+ */
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
 
@@ -87,6 +169,65 @@ app.post('/login', (req, res) => {
   });
 });
 
+// Endpoint per ottenere la lista completa degli utenti
+/**
+ * @swagger
+ * /users:
+ *   get:
+ *     summary: Ottiene la lista completa degli utenti
+ *     responses:
+ *       200:
+ *         description: Lista di utenti
+ *       500:
+ *         description: Errore durante il recupero degli utenti
+ */
+app.get('/users', (req, res) => {
+  const query = `SELECT id, nome, cognome, email, aeroporto_preferenza FROM utenti`;
+  db.all(query, [], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: 'Errore durante il recupero degli utenti: ' + err.message });
+    }
+    res.json({ utenti: rows });
+  });
+});
+
+// Endpoint per ottenere la lista degli utenti filtrati per un aeroporto specifico
+/**
+ * @swagger
+ * /users/filter:
+ *   get:
+ *     summary: Ottiene la lista degli utenti filtrati per aeroporto
+ *     parameters:
+ *       - in: query
+ *         name: aeroporto
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Codice dell'aeroporto per il filtro
+ *     responses:
+ *       200:
+ *         description: Lista di utenti filtrata per aeroporto
+ *       400:
+ *         description: Specificare un aeroporto per il filtro
+ *       500:
+ *         description: Errore durante il recupero degli utenti filtrati
+ */
+app.get('/users/filter', (req, res) => {
+  const aeroporto = req.query.aeroporto;
+  if (!aeroporto) {
+    return res.status(400).json({ error: 'Specificare un aeroporto per il filtro' });
+  }
+
+  const query = `SELECT id, nome, cognome, email, aeroporto_preferenza FROM utenti WHERE aeroporto_preferenza = ?`;
+  db.all(query, [aeroporto], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: 'Errore durante il recupero degli utenti filtrati: ' + err.message });
+    }
+    res.json({ utenti: rows });
+  });
+});
+
+// Gestione della chiusura del database in modo sicuro
 const gracefulShutdown = () => {
   db.close((err) => {
     if (err) {
@@ -101,6 +242,7 @@ const gracefulShutdown = () => {
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
 
+// Avvio del server
 app.listen(port, () => {
   console.log(`Server API in esecuzione su http://localhost:${port}`);
 });
