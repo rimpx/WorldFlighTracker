@@ -133,3 +133,8 @@ L'API di **WorldFlightTracker** consente la registrazione e il login degli utent
   "email": "stringa",
   "password": "stringa"
   }
+
+
+## Mockup
+
+![Diagramma](./diagram.svg)
