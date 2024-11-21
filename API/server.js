@@ -8,7 +8,16 @@ const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 
-app.use(cors());
+// Configurazione middleware CORS
+const corsOptions = {
+  origin: 'http://www.rimpici.it', // Specifica il tuo dominio con HTTP
+  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false, // Disattiva i cookie se non necessari
+};
+app.use(cors(corsOptions));
+
+// Parsing JSON
 app.use(express.json());
 
 // Configurazione del database SQLite
@@ -41,17 +50,17 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: 'http://localhost:3000',
+        url: 'https://www.rimpici.it/api',
       },
     ],
   },
-  apis: ['./server.js'], // Specifica il file contenente le route dell'API
+  apis: ['./server.js'],
 };
 
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-// Route di registrazione
+// Route per registrazione utente
 /**
  * @swagger
  * /register:
@@ -109,7 +118,7 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// Route di login
+// Route per login utente
 /**
  * @swagger
  * /login:
@@ -169,65 +178,10 @@ app.post('/login', (req, res) => {
   });
 });
 
-// Endpoint per ottenere la lista completa degli utenti
-/**
- * @swagger
- * /users:
- *   get:
- *     summary: Ottiene la lista completa degli utenti
- *     responses:
- *       200:
- *         description: Lista di utenti
- *       500:
- *         description: Errore durante il recupero degli utenti
- */
-app.get('/users', (req, res) => {
-  const query = `SELECT id, nome, cognome, email, aeroporto_preferenza FROM utenti`;
-  db.all(query, [], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: 'Errore durante il recupero degli utenti: ' + err.message });
-    }
-    res.json({ utenti: rows });
-  });
-});
+// Endpoint per richieste preflight
+app.options('*', cors(corsOptions)); // Gestisce le richieste OPTIONS
 
-// Endpoint per ottenere la lista degli utenti filtrati per un aeroporto specifico
-/**
- * @swagger
- * /users/filter:
- *   get:
- *     summary: Ottiene la lista degli utenti filtrati per aeroporto
- *     parameters:
- *       - in: query
- *         name: aeroporto
- *         schema:
- *           type: string
- *         required: true
- *         description: Codice dell'aeroporto per il filtro
- *     responses:
- *       200:
- *         description: Lista di utenti filtrata per aeroporto
- *       400:
- *         description: Specificare un aeroporto per il filtro
- *       500:
- *         description: Errore durante il recupero degli utenti filtrati
- */
-app.get('/users/filter', (req, res) => {
-  const aeroporto = req.query.aeroporto;
-  if (!aeroporto) {
-    return res.status(400).json({ error: 'Specificare un aeroporto per il filtro' });
-  }
-
-  const query = `SELECT id, nome, cognome, email, aeroporto_preferenza FROM utenti WHERE aeroporto_preferenza = ?`;
-  db.all(query, [aeroporto], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: 'Errore durante il recupero degli utenti filtrati: ' + err.message });
-    }
-    res.json({ utenti: rows });
-  });
-});
-
-// Gestione della chiusura del database in modo sicuro
+// Gestione della chiusura del database
 const gracefulShutdown = () => {
   db.close((err) => {
     if (err) {

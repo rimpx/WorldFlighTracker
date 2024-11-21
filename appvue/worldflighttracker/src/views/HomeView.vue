@@ -103,7 +103,7 @@ export default {
       };
 
       try {
-        const response = await fetch('http://www.rimpici.it/api/register', {
+        const response = await fetch('https://www.rimpici.it/api/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(userData)
@@ -129,7 +129,7 @@ export default {
       };
 
       try {
-        const response = await fetch('http://www.rimpici.it/api/login', {
+        const response = await fetch('https://www.rimpici.it/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(loginData)
