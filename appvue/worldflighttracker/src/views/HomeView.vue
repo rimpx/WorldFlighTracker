@@ -51,18 +51,22 @@
           class="input-field"
           required
         />
-        <button type="submit" class="login-button">{{ isLogin ? 'Login' : 'Register' }}</button>
+        <button type="submit" class="login-button">
+          {{ isLogin ? 'Login' : 'Register' }}
+        </button>
         <button @click.prevent="toggleMode" class="toggle-button">
           {{ isLogin ? 'Passa a Registrati' : 'Passa a Login' }}
         </button>
-        <p v-if="message" :class="{ 'error-message': isError, 'success-message': !isError }">{{ message }}</p>
+        <p v-if="message" :class="{ 'error-message': isError, 'success-message': !isError }">
+          {{ message }}
+        </p>
       </form>
     </div>
   </div>
 </template>
 
 <script>
-import { login } from '@/auth.js';
+import { login } from "@/auth.js";
 
 export default {
   data() {
@@ -75,7 +79,7 @@ export default {
       email: "",
       password: "",
       message: "",
-      isError: false
+      isError: false,
     };
   },
   methods: {
@@ -99,14 +103,14 @@ export default {
         eta: this.eta,
         email: this.email,
         password: this.password,
-        aeroporto_preferenza: this.aeroporto_preferenza
+        aeroporto_preferenza: this.aeroporto_preferenza,
       };
 
       try {
-        const response = await fetch('https://www.rimpici.it/api/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(userData)
+        const response = await fetch("https://www.rimpici.it/api/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(userData),
         });
 
         if (!response.ok) {
@@ -125,14 +129,17 @@ export default {
     async loginUser() {
       const loginData = {
         email: this.email,
-        password: this.password
+        password: this.password,
       };
 
       try {
-        const response = await fetch('https://www.rimpici.it/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(loginData)
+        const response = await fetch("https://www.rimpici.it/api/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(loginData),
+          credentials: "include", // Invia i cookie con la richiesta
         });
 
         if (!response.ok) {
@@ -143,15 +150,36 @@ export default {
         this.message = data.message || "Login effettuato con successo!";
         this.isError = false;
 
-        // Imposta autenticazione e reindirizza
+        // Reindirizza alla pagina di successo dopo il login
         login();
-        this.$router.push('/success');
+        this.$router.push("/success");
       } catch (error) {
         this.message = "Errore nel login: " + error.message;
         this.isError = true;
       }
-    }
-  }
+    },
+    async checkSession() {
+      try {
+        const response = await fetch("https://www.rimpici.it/api/profile", {
+          method: "GET",
+          credentials: "include", // Include i cookie nella richiesta
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          this.message = `Bentornato, ${data.user.nome}!`;
+          this.isError = false;
+          this.$router.push("/success");
+        }
+      } catch {
+        // Ignora se non autenticato
+      }
+    },
+  },
+  async created() {
+    // Controlla se l'utente ha già una sessione attiva
+    await this.checkSession();
+  },
 };
 </script>
 
