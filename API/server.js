@@ -2,23 +2,39 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcrypt');
 const cors = require('cors');
+const session = require('express-session');
 const swaggerJsDoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
+
 const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 
 // Configurazione middleware CORS
 const corsOptions = {
-  origin: 'http://www.rimpici.it', // Specifica il tuo dominio con HTTP
+  origin: 'http://www.rimpici.it',
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: false, // Disattiva i cookie se non necessari
+  credentials: true, // Necessario per le sessioni
 };
 app.use(cors(corsOptions));
 
 // Parsing JSON
 app.use(express.json());
+
+// Configurazione delle sessioni
+app.use(
+  session({
+    secret: 'il-tuo-segreto-unico', // Cambialo con una stringa complessa
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: false, // Imposta true se usi HTTPS
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24, // 1 giorno
+    },
+  })
+);
 
 // Configurazione del database SQLite
 let db = new sqlite3.Database('./database.db', (err) => {
@@ -60,7 +76,6 @@ const swaggerOptions = {
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-// Route per registrazione utente
 /**
  * @swagger
  * /register:
@@ -118,7 +133,6 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// Route per login utente
 /**
  * @swagger
  * /login:
@@ -166,20 +180,64 @@ app.post('/login', (req, res) => {
       return res.status(401).json({ error: 'Credenziali non valide' });
     }
 
+    req.session.user = {
+      id: user.id,
+      nome: user.nome,
+      email: user.email,
+      aeroporto_preferenza: user.aeroporto_preferenza,
+    };
+
     res.json({
       message: 'Login riuscito',
-      user: {
-        id: user.id,
-        nome: user.nome,
-        email: user.email,
-        aeroporto_preferenza: user.aeroporto_preferenza
-      }
+      user: req.session.user,
     });
   });
 });
 
+/**
+ * @swagger
+ * /profile:
+ *   get:
+ *     summary: Visualizza il profilo utente
+ *     responses:
+ *       200:
+ *         description: Profilo utente
+ *       401:
+ *         description: Non autenticato
+ */
+app.get('/profile', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Non autenticato' });
+  }
+  res.json({
+    message: 'Profilo utente',
+    user: req.session.user,
+  });
+});
+
+/**
+ * @swagger
+ * /logout:
+ *   post:
+ *     summary: Effettua il logout
+ *     responses:
+ *       200:
+ *         description: Logout riuscito
+ *       500:
+ *         description: Errore durante il logout
+ */
+app.post('/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Errore durante il logout' });
+    }
+    res.clearCookie('connect.sid');
+    res.json({ message: 'Logout riuscito' });
+  });
+});
+
 // Endpoint per richieste preflight
-app.options('*', cors(corsOptions)); // Gestisce le richieste OPTIONS
+app.options('*', cors(corsOptions));
 
 // Gestione della chiusura del database
 const gracefulShutdown = () => {

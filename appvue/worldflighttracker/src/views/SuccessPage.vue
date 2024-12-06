@@ -1,4 +1,4 @@
-template>
+<template>
   <div class="container">
     <h1>Login avvenuto con successo!</h1>
     <p>Benvenuto! Hai effettuato l'accesso con successo.</p>
