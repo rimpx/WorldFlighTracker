@@ -36,6 +36,14 @@ app.use(
   })
 );
 
+// Middleware per proteggere le rotte private
+const requireAuth = (req, res, next) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Non autenticato' });
+  }
+  next();
+};
+
 // Configurazione del database SQLite
 let db = new sqlite3.Database('./database.db', (err) => {
   if (err) {
@@ -81,33 +89,6 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
  * /register:
  *   post:
  *     summary: Registra un nuovo utente
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               nome:
- *                 type: string
- *               cognome:
- *                 type: string
- *               eta:
- *                 type: integer
- *                 minimum: 16
- *               email:
- *                 type: string
- *               password:
- *                 type: string
- *               aeroporto_preferenza:
- *                 type: string
- *     responses:
- *       201:
- *         description: Utente registrato con successo
- *       400:
- *         description: Tutti i campi sono obbligatori o età minima non rispettata
- *       500:
- *         description: Errore durante la registrazione
  */
 app.post('/register', async (req, res) => {
   const { nome, cognome, eta, email, password, aeroporto_preferenza } = req.body;
@@ -138,26 +119,6 @@ app.post('/register', async (req, res) => {
  * /login:
  *   post:
  *     summary: Effettua il login di un utente
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *               password:
- *                 type: string
- *     responses:
- *       200:
- *         description: Login riuscito
- *       400:
- *         description: Email e password sono obbligatori
- *       404:
- *         description: Utente non trovato
- *       500:
- *         description: Errore durante la ricerca dell'utente
  */
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
@@ -199,16 +160,8 @@ app.post('/login', (req, res) => {
  * /profile:
  *   get:
  *     summary: Visualizza il profilo utente
- *     responses:
- *       200:
- *         description: Profilo utente
- *       401:
- *         description: Non autenticato
  */
-app.get('/profile', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Non autenticato' });
-  }
+app.get('/profile', requireAuth, (req, res) => {
   res.json({
     message: 'Profilo utente',
     user: req.session.user,
@@ -220,11 +173,6 @@ app.get('/profile', (req, res) => {
  * /logout:
  *   post:
  *     summary: Effettua il logout
- *     responses:
- *       200:
- *         description: Logout riuscito
- *       500:
- *         description: Errore durante il logout
  */
 app.post('/logout', (req, res) => {
   req.session.destroy((err) => {
@@ -235,9 +183,6 @@ app.post('/logout', (req, res) => {
     res.json({ message: 'Logout riuscito' });
   });
 });
-
-// Endpoint per richieste preflight
-app.options('*', cors(corsOptions));
 
 // Gestione della chiusura del database
 const gracefulShutdown = () => {
