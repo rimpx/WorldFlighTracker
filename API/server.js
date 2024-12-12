@@ -15,7 +15,7 @@ const corsOptions = {
   origin: 'http://www.rimpici.it',
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true, // Necessario per le sessioni
+  credentials: true,
 };
 app.use(cors(corsOptions));
 
@@ -25,11 +25,11 @@ app.use(express.json());
 // Configurazione delle sessioni
 app.use(
   session({
-    secret: 'il-tuo-segreto-unico', // Cambialo con una stringa complessa
+    secret: 'il-tuo-segreto-unico',
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false, // Imposta true se usi HTTPS
+      secure: process.env.NODE_ENV === 'production', // Abilitato solo in HTTPS
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24, // 1 giorno
     },
@@ -64,32 +64,29 @@ db.run(`CREATE TABLE IF NOT EXISTS utenti (
 )`);
 
 // Configurazione Swagger
-const swaggerOptions = {
-  swaggerDefinition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'User Management API',
-      version: '1.0.0',
-      description: 'API per la gestione degli utenti e autenticazione',
-    },
-    servers: [
-      {
-        url: 'https://www.rimpici.it/api',
+if (process.env.NODE_ENV !== 'production') {
+  const swaggerOptions = {
+    swaggerDefinition: {
+      openapi: '3.0.0',
+      info: {
+        title: 'User Management API',
+        version: '1.0.0',
+        description: 'API per la gestione degli utenti e autenticazione',
       },
-    ],
-  },
-  apis: ['./server.js'],
-};
+      servers: [
+        {
+          url: 'https://www.rimpici.it/api',
+        },
+      ],
+    },
+    apis: ['./server.js'],
+  };
 
-const swaggerDocs = swaggerJsDoc(swaggerOptions);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+  const swaggerDocs = swaggerJsDoc(swaggerOptions);
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+}
 
-/**
- * @swagger
- * /register:
- *   post:
- *     summary: Registra un nuovo utente
- */
+// Endpoint per la registrazione
 app.post('/register', async (req, res) => {
   const { nome, cognome, eta, email, password, aeroporto_preferenza } = req.body;
 
@@ -97,29 +94,24 @@ app.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
   }
   if (eta < 16) {
-    return res.status(400).json({ error: 'L\'età minima è di 16 anni' });
+    return res.status(400).json({ error: "L'età minima è di 16 anni" });
   }
 
   try {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     const query = `INSERT INTO utenti (nome, cognome, eta, email, password, aeroporto_preferenza) VALUES (?, ?, ?, ?, ?, ?)`;
-    db.run(query, [nome, cognome, eta, email, hashedPassword, aeroporto_preferenza], function(err) {
+    db.run(query, [nome, cognome, eta, email, hashedPassword, aeroporto_preferenza], function (err) {
       if (err) {
         return res.status(500).json({ error: 'Errore durante la registrazione: ' + err.message });
       }
       res.status(201).json({ message: 'Utente registrato con successo', id: this.lastID });
     });
   } catch (error) {
-    res.status(500).json({ error: 'Errore durante l\'hashing della password' });
+    res.status(500).json({ error: "Errore durante l'hashing della password" });
   }
 });
 
-/**
- * @swagger
- * /login:
- *   post:
- *     summary: Effettua il login di un utente
- */
+// Endpoint per il login
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
 
@@ -130,37 +122,36 @@ app.post('/login', (req, res) => {
   const query = `SELECT * FROM utenti WHERE email = ?`;
   db.get(query, [email], async (err, user) => {
     if (err) {
-      return res.status(500).json({ error: 'Errore durante la ricerca dell\'utente: ' + err.message });
+      return res.status(500).json({ error: "Errore durante la ricerca dell'utente: " + err.message });
     }
     if (!user) {
       return res.status(404).json({ error: 'Utente non trovato' });
     }
 
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) {
-      return res.status(401).json({ error: 'Credenziali non valide' });
+    try {
+      const passwordMatch = await bcrypt.compare(password, user.password);
+      if (!passwordMatch) {
+        return res.status(401).json({ error: 'Credenziali non valide' });
+      }
+
+      req.session.user = {
+        id: user.id,
+        nome: user.nome,
+        email: user.email,
+        aeroporto_preferenza: user.aeroporto_preferenza,
+      };
+
+      res.json({
+        message: 'Login riuscito',
+        user: req.session.user,
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Errore durante il confronto della password' });
     }
-
-    req.session.user = {
-      id: user.id,
-      nome: user.nome,
-      email: user.email,
-      aeroporto_preferenza: user.aeroporto_preferenza,
-    };
-
-    res.json({
-      message: 'Login riuscito',
-      user: req.session.user,
-    });
   });
 });
 
-/**
- * @swagger
- * /profile:
- *   get:
- *     summary: Visualizza il profilo utente
- */
+// Endpoint per il profilo
 app.get('/profile', requireAuth, (req, res) => {
   res.json({
     message: 'Profilo utente',
@@ -168,12 +159,7 @@ app.get('/profile', requireAuth, (req, res) => {
   });
 });
 
-/**
- * @swagger
- * /logout:
- *   post:
- *     summary: Effettua il logout
- */
+// Endpoint per il logout
 app.post('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
@@ -182,6 +168,11 @@ app.post('/logout', (req, res) => {
     res.clearCookie('connect.sid');
     res.json({ message: 'Logout riuscito' });
   });
+});
+
+// Rotte non definite
+app.use((req, res) => {
+  res.status(404).json({ error: 'Risorsa non trovata' });
 });
 
 // Gestione della chiusura del database
