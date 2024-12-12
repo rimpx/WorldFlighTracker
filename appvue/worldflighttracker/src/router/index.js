@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import { isLoggedIn } from '../auth'; // Ora isLoggedIn è esportato correttamente
+import { isLoggedIn } from '../auth'; // Funzione che verifica se l'utente è loggato
 
 import HomeView from '../views/HomeView.vue';
 import SuccessPage from '../views/SuccessPage.vue';
@@ -8,29 +8,34 @@ const routes = [
   {
     path: '/',
     name: 'Home',
-    component: HomeView
+    component: HomeView,
+    beforeEnter: (to, from, next) => {
+      if (isLoggedIn()) {
+        next('/success');  // Se l'utente è già loggato, lo reindirizza alla success page
+      } else {
+        next();  // Altrimenti, procedi con la visualizzazione della home page
+      }
+    },
   },
   {
     path: '/success',
     name: 'Success',
     component: SuccessPage,
-    meta: { requiresAuth: true }  // Indica che la rotta richiede autenticazione
+    meta: { requiresAuth: true }, // La pagina di successo richiede l'autenticazione
   }
 ];
 
 const router = createRouter({
   history: createWebHistory(process.env.BASE_URL),
-  routes
+  routes,
 });
 
-// Aggiungi un controllo globale per la protezione delle rotte
+// Proteggi le rotte che richiedono autenticazione
 router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !isLoggedIn()) {
-    // Se la rotta richiede autenticazione e l'utente non è autenticato, reindirizza alla home
-    next('/');
+    next('/'); // Se la rotta richiede autenticazione e l'utente non è autenticato, torna alla home
   } else {
-    // Procedi alla rotta successiva
-    next();
+    next(); // Altrimenti, procedi
   }
 });
 

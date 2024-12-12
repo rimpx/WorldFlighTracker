@@ -12,10 +12,10 @@ const saltRounds = 10;
 
 // Configurazione middleware CORS
 const corsOptions = {
-  origin: 'http://www.rimpici.it',
+  origin: 'https://www.rimpici.it',
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
+  credentials: true, 
 };
 app.use(cors(corsOptions));
 

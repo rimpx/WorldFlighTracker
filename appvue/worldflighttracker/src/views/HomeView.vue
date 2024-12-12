@@ -150,8 +150,8 @@ export default {
         this.message = data.message || "Login effettuato con successo!";
         this.isError = false;
 
-        // Reindirizza alla pagina di successo dopo il login
-        login();
+        // Salva il token dell'utente
+        login(data.token);  // Salva il token al login
         this.$router.push("/success");
       } catch (error) {
         this.message = "Errore nel login: " + error.message;
