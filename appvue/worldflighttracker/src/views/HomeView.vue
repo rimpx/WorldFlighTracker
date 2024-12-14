@@ -6,51 +6,13 @@
     <div class="login-container">
       <h2>Accedi o Registrati</h2>
       <form @submit.prevent="isLogin ? loginUser() : registerUser()">
-        <input
-          v-if="!isLogin"
-          type="text"
-          v-model="nome"
-          placeholder="Nome"
-          class="input-field"
-          required
-        />
-        <input
-          v-if="!isLogin"
-          type="text"
-          v-model="cognome"
-          placeholder="Cognome"
-          class="input-field"
-          required
-        />
-        <input
-          v-if="!isLogin"
-          type="number"
-          v-model="eta"
-          placeholder="Età"
-          class="input-field"
-          required
-        />
-        <input
-          v-if="!isLogin"
-          type="text"
-          v-model="aeroporto_preferenza"
-          placeholder="Aeroporto Preferito"
-          class="input-field"
-        />
-        <input
-          type="email"
-          v-model="email"
-          placeholder="Email"
-          class="input-field"
-          required
-        />
-        <input
-          type="password"
-          v-model="password"
-          placeholder="Password"
-          class="input-field"
-          required
-        />
+        <input v-if="!isLogin" type="text" v-model="nome" placeholder="Nome" class="input-field" required />
+        <input v-if="!isLogin" type="text" v-model="cognome" placeholder="Cognome" class="input-field" required />
+        <input v-if="!isLogin" type="number" v-model="eta" placeholder="Età" class="input-field" required />
+        <input v-if="!isLogin" type="text" v-model="aeroporto_preferenza" placeholder="Aeroporto Preferito"
+          class="input-field" />
+        <input type="email" v-model="email" placeholder="Email" class="input-field" required />
+        <input type="password" v-model="password" placeholder="Password" class="input-field" required />
         <button type="submit" class="login-button">
           {{ isLogin ? 'Login' : 'Register' }}
         </button>
@@ -66,8 +28,6 @@
 </template>
 
 <script>
-import { login } from "@/auth.js";
-
 export default {
   data() {
     return {
@@ -98,16 +58,15 @@ export default {
     },
     async registerUser() {
       const userData = {
-        nome: this.nome,
-        cognome: this.cognome,
-        eta: this.eta,
+        username: this.nome,  // Mappato a 'username' per il server
         email: this.email,
         password: this.password,
-        aeroporto_preferenza: this.aeroporto_preferenza,
+        age: this.eta,  // Mappato a 'age'
+        favorite_airport: this.aeroporto_preferenza, // Mappato a 'favorite_airport'
       };
 
       try {
-        const response = await fetch("https://www.rimpici.it/api/register", {
+        const response = await fetch("http://localhost:3000/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(userData),
@@ -133,13 +92,11 @@ export default {
       };
 
       try {
-        const response = await fetch("https://www.rimpici.it/api/login", {
+        const response = await fetch("http://localhost:3000/login", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(loginData),
-          credentials: "include", // Invia i cookie con la richiesta
+          credentials: "include", // Include i cookie
         });
 
         if (!response.ok) {
@@ -150,64 +107,40 @@ export default {
         this.message = data.message || "Login effettuato con successo!";
         this.isError = false;
 
-        // Salva il token dell'utente
-        login(data.token);  // Salva il token al login
+        // Salva il token o aggiorna sessionStorage
+        sessionStorage.setItem("accountName", data.user.username);
+        localStorage.setItem("user-token", "valid-token"); // Token fittizio per autenticazione
+
+        // Reindirizza alla pagina successiva
         this.$router.push("/success");
       } catch (error) {
         this.message = "Errore nel login: " + error.message;
         this.isError = true;
       }
-    },
-    async checkSession() {
-      try {
-        const response = await fetch("https://www.rimpici.it/api/profile", {
-          method: "GET",
-          credentials: "include", // Include i cookie nella richiesta
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          this.message = `Bentornato, ${data.user.nome}!`;
-          this.isError = false;
-          this.$router.push("/success");
-        }
-      } catch {
-        // Ignora se non autenticato
-      }
-    },
-  },
-  async created() {
-    // Controlla se l'utente ha già una sessione attiva
-    await this.checkSession();
+    }
+    ,
   },
 };
 </script>
 
+
 <style scoped>
-/* Stili di base per la container */
 .container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100vh;
-  padding: 20px;
   background-color: #000;
   color: #fff;
-  box-sizing: border-box;
 }
 
 .app-name {
   font-size: 2.5rem;
   font-weight: bold;
-  color: #fff;
-  margin-bottom: 20px; /* Distanza tra il titolo e la box */
-  text-align: center; /* Centrato per dispositivi mobili */
-  width: 100%;
-  max-width: 350px; /* Imposta una larghezza massima per desktop */
+  margin-bottom: 20px;
 }
 
-/* Contenitore di login */
 .login-container {
   background-color: #333;
   padding: 20px;
@@ -215,11 +148,6 @@ export default {
   max-width: 350px;
   width: 100%;
   text-align: center;
-}
-
-h2 {
-  margin-bottom: 20px;
-  color: #fff;
 }
 
 .input-field {
@@ -240,7 +168,6 @@ h2 {
   border-radius: 4px;
   color: #fff;
   cursor: pointer;
-  font-size: 1rem;
 }
 
 .login-button {
@@ -257,45 +184,5 @@ h2 {
 
 .success-message {
   color: #4caf50;
-}
-
-/* Layout per dispositivi desktop */
-@media (min-width: 768px) {
-  .container {
-    flex-direction: row; /* Align items horizontally */
-    justify-content: flex-start; /* Sposta gli elementi a sinistra */
-    padding-left: 40px; /* Distanza tra il bordo sinistro e il contenuto */
-  }
-
-  .app-name {
-    margin-right: 40px; /* Aumenta la distanza tra il titolo e la box */
-    text-align: left; /* Allinea il testo a sinistra */
-    font-size: 2.5rem; /* Dimensione titolo più grande per desktop */
-  }
-
-  .login-container {
-    margin-left: 40px; /* Aumenta la distanza tra il form e il titolo */
-    text-align: left; /* Allinea il form a sinistra */
-    width: auto;
-  }
-}
-
-/* Layout per dispositivi mobili */
-@media (max-width: 768px) {
-  .container {
-    flex-direction: column; /* Allinea gli elementi in colonna per dispositivi mobili */
-    justify-content: center;
-  }
-
-  .app-name {
-    font-size: 1.8rem; /* Rimpicciolisce il titolo per dispositivi mobili */
-    text-align: center; /* Allinea il testo al centro */
-    margin-bottom: 15px; /* Distanza tra il titolo e la box */
-  }
-
-  .login-container {
-    max-width: 100%;
-    padding: 15px;
-  }
 }
 </style>

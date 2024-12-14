@@ -17,30 +17,63 @@
 </template>
 
 <script>
-import { logout } from "@/auth.js";
-
 export default {
   name: "SuccessPage",
   data() {
     return {
-      accountName: "Utente", // Imposta il nome dell'account (da aggiornare con i dati reali)
+      accountName: "", // Nome utente aggiornato dopo il login
     };
   },
-  mounted() {
-    // Qui potresti caricare il nome dell'utente dal backend o da una sessione.
-    const storedAccountName = sessionStorage.getItem("accountName");
+  async mounted() {
+    // Recupera il nome utente dal sessionStorage o dal localStorage se presente
+    const storedAccountName = sessionStorage.getItem("accountName") || localStorage.getItem("accountName");
     if (storedAccountName) {
       this.accountName = storedAccountName;
+    } else {
+      // Se non trovato, fai una richiesta al server per recuperarlo
+      try {
+        const response = await fetch("http://localhost:3000/profile", {
+          method: "GET",
+          credentials: "include", // Include i cookie nella richiesta
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          this.accountName = data.user.nome || "Utente"; // Imposta il nome dell'utente
+          // Salva il nome utente nel sessionStorage per evitare richieste future
+          sessionStorage.setItem("accountName", this.accountName);
+        } else {
+          console.error("Errore nel recupero del profilo:", response.status);
+          this.$router.push("/"); // Reindirizza alla login se non autenticato
+        }
+      } catch (error) {
+        console.error("Errore nella richiesta del profilo:", error.message);
+        this.$router.push("/"); // Reindirizza alla login in caso di errore
+      }
     }
   },
   methods: {
     navigateHome() {
       this.$router.push("/");
     },
-    logout() {
-      logout(); // Chiama la funzione per rimuovere il cookie o terminare la sessione
-      sessionStorage.clear(); // Rimuove i dati dalla sessione
-      this.$router.push("/"); // Reindirizza alla pagina di login
+    async logout() {
+      try {
+        const response = await fetch("http://localhost:3000/logout", {
+          method: "POST",
+          credentials: "include", // Include i cookie nella richiesta
+        });
+
+        if (response.ok) {
+          sessionStorage.clear(); // Rimuovi i dati dalla sessione
+          localStorage.removeItem("user-token"); // Rimuovi il token dal localStorage
+          sessionStorage.removeItem("accountName"); // Rimuovi il nome utente dalla sessione
+          this.$router.push("/"); // Reindirizza alla pagina di login
+        } else {
+          console.error("Errore durante il logout:", response.status);
+        }
+      } catch (error) {
+        console.error("Errore nella richiesta di logout:", error.message);
+      }
     },
   },
 };

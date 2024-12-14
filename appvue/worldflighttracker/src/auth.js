@@ -16,3 +16,8 @@ export function logout() {
   // Rimuovi il token al logout
   localStorage.removeItem('user-token');
 }
+
+export function getToken() {
+  // Ottieni il token salvato
+  return localStorage.getItem('user-token');
+}
