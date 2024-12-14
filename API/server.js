@@ -10,12 +10,24 @@ const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 
+// Configurazione delle origini autorizzate
+const allowedOrigins =
+  process.env.NODE_ENV === 'production'
+    ? ['https://www.rimpici.it']
+    : ['https://www.rimpici.it', 'https://redesigned-chainsaw-4xrqq7g4p9w3j6qj-8080.app.github.dev'];
+
 // Configurazione middleware CORS
 const corsOptions = {
-  origin: 'https://www.rimpici.it',
+  origin: (origin, callback) => {
+    if (allowedOrigins.includes(origin) || !origin) {
+      callback(null, true);
+    } else {
+      callback(new Error('Non consentito da CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true, 
+  credentials: true,
 };
 app.use(cors(corsOptions));
 
@@ -29,7 +41,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === 'production', // Abilitato solo in HTTPS
+      secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24, // 1 giorno
     },
