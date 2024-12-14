@@ -10,24 +10,25 @@ const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 
-// Configurazione delle origini autorizzate
-const allowedOrigins =
-  process.env.NODE_ENV === 'production'
-    ? ['https://www.rimpici.it']
-    : ['https://www.rimpici.it', 'https://redesigned-chainsaw-4xrqq7g4p9w3j6qj-8080.app.github.dev'];
+// Origini consentite
+const allowedOrigins = [
+  'https://www.rimpici.it',
+  'https://redesigned-chainsaw-4xrqq7g4p9w3j6qj-8080.app.github.dev', // Origine locale per sviluppo
+];
 
 // Configurazione middleware CORS
 const corsOptions = {
   origin: (origin, callback) => {
-    if (allowedOrigins.includes(origin) || !origin) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.error('Origine bloccata da CORS:', origin); // Log utile per debug
       callback(new Error('Non consentito da CORS'));
     }
   },
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
+  credentials: true, // Necessario per gestire cookie/sessione
 };
 app.use(cors(corsOptions));
 
@@ -41,7 +42,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production', // Abilitato solo in HTTPS
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24, // 1 giorno
     },
@@ -76,27 +77,25 @@ db.run(`CREATE TABLE IF NOT EXISTS utenti (
 )`);
 
 // Configurazione Swagger
-if (process.env.NODE_ENV !== 'production') {
-  const swaggerOptions = {
-    swaggerDefinition: {
-      openapi: '3.0.0',
-      info: {
-        title: 'User Management API',
-        version: '1.0.0',
-        description: 'API per la gestione degli utenti e autenticazione',
-      },
-      servers: [
-        {
-          url: 'https://www.rimpici.it/api',
-        },
-      ],
+const swaggerOptions = {
+  swaggerDefinition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'User Management API',
+      version: '1.0.0',
+      description: 'API per la gestione degli utenti e autenticazione',
     },
-    apis: ['./server.js'],
-  };
+    servers: [
+      {
+        url: 'https://www.rimpici.it/api',
+      },
+    ],
+  },
+  apis: ['./server.js'],
+};
 
-  const swaggerDocs = swaggerJsDoc(swaggerOptions);
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
-}
+const swaggerDocs = swaggerJsDoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Endpoint per la registrazione
 app.post('/register', async (req, res) => {
