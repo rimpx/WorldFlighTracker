@@ -39,6 +39,7 @@ let db = new sqlite3.Database('./database.db', (err) => {
   }
 });
 
+// Aggiorna la tabella users per includere il campo is_admin
 db.run(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,7 +47,8 @@ db.run(`
     email TEXT,
     password TEXT NOT NULL,
     age INTEGER NOT NULL CHECK(age >= 16),
-    favorite_airport TEXT NOT NULL
+    favorite_airport TEXT NOT NULL,
+    is_admin BOOLEAN NOT NULL DEFAULT 0
   )
 `);
 
@@ -66,7 +68,7 @@ app.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     db.run(
-      `INSERT INTO users (username, email, password, age, favorite_airport) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO users (username, email, password, age, favorite_airport, is_admin) VALUES (?, ?, ?, ?, ?, 0)`,
       [username, email, hashedPassword, age, favorite_airport],
       function (err) {
         if (err) {
@@ -82,21 +84,14 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// Endpoint per ottenere informazioni aggiuntive dell'utente
-app.get('/user-info/:id', (req, res) => {
-  const userId = req.params.id;
-
-  db.get(`SELECT age, favorite_airport FROM users WHERE id = ?`, [userId], (err, user) => {
-    if (err) {
-      console.error('Errore nel recupero informazioni utente:', err.message);
-      return res.status(500).json({ message: 'Errore del server' });
-    }
-    if (!user) {
-      return res.status(404).json({ message: 'Utente non trovato' });
-    }
-    res.json(user);
-  });
-});
+// Middleware per proteggere gli endpoint admin
+function isAdmin(req, res, next) {
+  if (req.session.user && req.session.user.is_admin) {
+    next();
+  } else {
+    return res.status(403).json({ message: "Accesso negato. Non sei un admin." });
+  }
+}
 
 // Endpoint per il login
 app.post('/login', (req, res) => {
@@ -129,8 +124,10 @@ app.post('/login', (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
+        is_admin: user.is_admin, // Deve essere presente
       };
 
+      console.log('Sessione impostata:', req.session.user); // Log sessione dopo login
       res.json({ message: 'Login riuscito', user: req.session.user });
     }
   );
@@ -148,55 +145,78 @@ app.post('/logout', (req, res) => {
   });
 });
 
-// Endpoint di controllo sessione (aggiornato)
+// Endpoint di controllo sessione
 app.get('/session', (req, res) => {
-  if (req.session.user) {
-    db.get(`SELECT username, email, age, favorite_airport FROM users WHERE id = ?`, [req.session.user.id], (err, user) => {
-      if (err) {
-        console.error('Errore nel recupero delle informazioni:', err.message);
-        return res.status(500).json({ message: 'Errore del server' });
-      }
-      res.json({ isAuthenticated: true, user });
-    });
-  } else {
-    res.json({ isAuthenticated: false });
+  console.log('Verifica sessione:', req.session); // Log dettagliato della sessione
+
+  if (!req.session.user || !req.session.user.id) {
+    console.warn('Sessione non valida o utente non loggato');
+    return res.status(401).json({ isAuthenticated: false, message: "Sessione non valida o utente non autenticato" });
   }
+
+  console.log('Recupero informazioni per ID utente:', req.session.user.id);
+
+  db.get(
+    `SELECT id, username, email, age, favorite_airport, is_admin FROM users WHERE id = ?`,
+    [req.session.user.id],
+    (err, user) => {
+      if (err) {
+        console.error('Errore SQL:', err.message);
+        return res.status(500).json({ message: 'Errore del server durante il recupero utente.' });
+      }
+
+      if (!user) {
+        console.warn(`Utente non trovato per ID ${req.session.user.id}`);
+        return res.status(404).json({ isAuthenticated: false, message: 'Utente non trovato' });
+      }
+
+      console.log('Utente trovato:', user);
+      res.json({ isAuthenticated: true, user });
+    }
+  );
 });
 
-app.post('/update-airport', (req, res) => {
-  const { airport } = req.body;
-  const userId = req.session.user.id;
-
-  if (!airport) return res.status(400).json({ message: 'Aeroporto mancante' });
-
-  db.run(`UPDATE users SET favorite_airport = ? WHERE id = ?`, [airport, userId], function (err) {
+// Endpoint per ottenere tutti gli utenti (solo admin)
+app.get('/admin/users', isAdmin, (req, res) => {
+  db.all(`SELECT id, username, email, age, favorite_airport FROM users`, (err, users) => {
     if (err) {
-      console.error('Errore aggiornamento aeroporto:', err.message);
-      return res.status(500).json({ message: 'Errore server' });
+      console.error('Errore nel recupero degli utenti:', err.message);
+      return res.status(500).json({ message: 'Errore del server' });
     }
-    res.json({ message: 'Aeroporto aggiornato con successo' });
+    res.json(users);
   });
 });
 
-app.post('/update-password', async (req, res) => {
-  const { password } = req.body;
-  const userId = req.session.user.id;
+// Endpoint per filtrare gli utenti in base all'aeroporto (solo admin)
+app.get('/admin/users/filter', isAdmin, (req, res) => {
+  const { airport } = req.query;
 
-  if (!password) return res.status(400).json({ message: 'Password mancante' });
+  if (!airport) return res.status(400).json({ message: "Aeroporto mancante per il filtro." });
 
-  try {
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-    db.run(`UPDATE users SET password = ? WHERE id = ?`, [hashedPassword, userId], function (err) {
+  db.all(
+    `SELECT id, username, email, age, favorite_airport FROM users WHERE favorite_airport = ?`,
+    [airport],
+    (err, users) => {
       if (err) {
-        console.error('Errore aggiornamento password:', err.message);
-        return res.status(500).json({ message: 'Errore server' });
+        console.error('Errore nel filtraggio utenti:', err.message);
+        return res.status(500).json({ message: 'Errore del server' });
       }
-      res.json({ message: 'Password aggiornata con successo' });
-    });
-  } catch (error) {
-    console.error("Errore hashing password:", error.message);
-    res.status(500).json({ message: "Errore server" });
-  }
+      res.json(users);
+    }
+  );
+});
+
+// Endpoint per eliminare un utente (solo admin)
+app.delete('/admin/users/:id', isAdmin, (req, res) => {
+  const userId = req.params.id;
+
+  db.run(`DELETE FROM users WHERE id = ?`, [userId], function (err) {
+    if (err) {
+      console.error('Errore nell\'eliminazione utente:', err.message);
+      return res.status(500).json({ message: 'Errore del server' });
+    }
+    res.json({ message: 'Utente eliminato con successo' });
+  });
 });
 
 // Gestione della chiusura del database

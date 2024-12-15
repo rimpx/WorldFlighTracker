@@ -4,12 +4,7 @@
     <Navbar :accountName="user.username" :favoriteAirport="user.favorite_airport" />
     <div class="content">
       <div class="search-box">
-        <input
-          type="text"
-          v-model="flightCode"
-          placeholder="Inserisci il codice volo"
-          class="flight-input"
-        />
+        <input type="text" v-model="flightCode" placeholder="Inserisci il codice volo" class="flight-input" />
         <button @click="searchFlight" class="search-button">SEARCH</button>
       </div>
     </div>
@@ -29,7 +24,13 @@ export default {
     };
   },
   async mounted() {
-    await fetchUserData(); // Recupera i dati utente
+    try {
+      await fetchUserData(); // Recupera i dati utente
+    } catch (error) {
+      console.error("Errore nel recupero dei dati utente:", error.message);
+      alert("Errore nel recupero delle informazioni utente. Effettua di nuovo il login.");
+      this.$router.push("/"); // Reindirizza alla pagina di login in caso di errore
+    }
   },
   computed: {
     user() {

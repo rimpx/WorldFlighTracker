@@ -58,7 +58,7 @@ export default {
     },
     async registerUser() {
       const userData = {
-        username: this.nome,  // Mappato a 'username' per il server
+        username: this.nome + this.cognome,  // Mappato a 'username' per il server
         email: this.email,
         password: this.password,
         age: this.eta,  // Mappato a 'age'
@@ -96,7 +96,7 @@ export default {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(loginData),
-          credentials: "include", // Include i cookie
+          credentials: "include",
         });
 
         if (!response.ok) {
@@ -107,18 +107,26 @@ export default {
         this.message = data.message || "Login effettuato con successo!";
         this.isError = false;
 
-        // Salva il token o aggiorna sessionStorage
+        // Salva i dettagli dell'utente nella sessione/localStorage
         sessionStorage.setItem("accountName", data.user.username);
-        localStorage.setItem("user-token", "valid-token"); // Token fittizio per autenticazione
+        sessionStorage.setItem("isAdmin", data.user.is_admin ? "true" : "false"); // Salva coerentemente
+        localStorage.setItem("user-token", "valid-token");
 
-        // Reindirizza alla pagina successiva
-        this.$router.push("/success");
+        console.log("isAdmin salvato in sessionStorage:", sessionStorage.getItem("isAdmin"));
+
+        // Reindirizza l'utente alla pagina appropriata
+        if (data.user.is_admin) {
+          console.log("Reindirizzamento: admin");
+          this.$router.push("/admin");
+        } else {
+          console.log("Reindirizzamento: success");
+          this.$router.push("/success");
+        }
       } catch (error) {
         this.message = "Errore nel login: " + error.message;
         this.isError = true;
       }
-    }
-    ,
+    },
   },
 };
 </script>
