@@ -3,6 +3,7 @@ import { isLoggedIn } from '../auth'; // Funzione che verifica se l'utente è lo
 
 import HomeView from '../views/HomeView.vue';
 import SuccessPage from '../views/SuccessPage.vue';
+import AccountPage from '../views/AccountPage.vue'; // Importa la nuova pagina ACCOUNT
 
 const routes = [
   {
@@ -11,9 +12,9 @@ const routes = [
     component: HomeView,
     beforeEnter: (to, from, next) => {
       if (isLoggedIn()) {
-        next('/success');  // Se l'utente è già loggato, lo reindirizza alla success page
+        next('/success'); // Se l'utente è già loggato, reindirizza alla success page
       } else {
-        next();  // Altrimenti, procedi con la visualizzazione della home page
+        next(); // Procedi con la home
       }
     },
   },
@@ -21,8 +22,14 @@ const routes = [
     path: '/success',
     name: 'Success',
     component: SuccessPage,
-    meta: { requiresAuth: true }, // La pagina di successo richiede l'autenticazione
-  }
+    meta: { requiresAuth: true }, // La pagina di successo richiede autenticazione
+  },
+  {
+    path: '/account',
+    name: 'Account',
+    component: AccountPage,
+    meta: { requiresAuth: true }, // La pagina account richiede autenticazione
+  },
 ];
 
 const router = createRouter({
@@ -33,9 +40,9 @@ const router = createRouter({
 // Proteggi le rotte che richiedono autenticazione
 router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !isLoggedIn()) {
-    next('/'); // Se la rotta richiede autenticazione e l'utente non è autenticato, torna alla home
+    next('/'); // Se non autenticato, reindirizza alla home
   } else {
-    next(); // Altrimenti, procedi
+    next(); // Altrimenti, procedi con la navigazione
   }
 });
 

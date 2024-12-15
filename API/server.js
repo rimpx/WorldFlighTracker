@@ -82,6 +82,22 @@ app.post('/register', async (req, res) => {
   }
 });
 
+// Endpoint per ottenere informazioni aggiuntive dell'utente
+app.get('/user-info/:id', (req, res) => {
+  const userId = req.params.id;
+
+  db.get(`SELECT age, favorite_airport FROM users WHERE id = ?`, [userId], (err, user) => {
+    if (err) {
+      console.error('Errore nel recupero informazioni utente:', err.message);
+      return res.status(500).json({ message: 'Errore del server' });
+    }
+    if (!user) {
+      return res.status(404).json({ message: 'Utente non trovato' });
+    }
+    res.json(user);
+  });
+});
+
 // Endpoint per il login
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
@@ -132,12 +148,54 @@ app.post('/logout', (req, res) => {
   });
 });
 
-// Endpoint di controllo sessione
+// Endpoint di controllo sessione (aggiornato)
 app.get('/session', (req, res) => {
   if (req.session.user) {
-    res.json({ isAuthenticated: true, user: req.session.user });
+    db.get(`SELECT username, email, age, favorite_airport FROM users WHERE id = ?`, [req.session.user.id], (err, user) => {
+      if (err) {
+        console.error('Errore nel recupero delle informazioni:', err.message);
+        return res.status(500).json({ message: 'Errore del server' });
+      }
+      res.json({ isAuthenticated: true, user });
+    });
   } else {
     res.json({ isAuthenticated: false });
+  }
+});
+
+app.post('/update-airport', (req, res) => {
+  const { airport } = req.body;
+  const userId = req.session.user.id;
+
+  if (!airport) return res.status(400).json({ message: 'Aeroporto mancante' });
+
+  db.run(`UPDATE users SET favorite_airport = ? WHERE id = ?`, [airport, userId], function (err) {
+    if (err) {
+      console.error('Errore aggiornamento aeroporto:', err.message);
+      return res.status(500).json({ message: 'Errore server' });
+    }
+    res.json({ message: 'Aeroporto aggiornato con successo' });
+  });
+});
+
+app.post('/update-password', async (req, res) => {
+  const { password } = req.body;
+  const userId = req.session.user.id;
+
+  if (!password) return res.status(400).json({ message: 'Password mancante' });
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    db.run(`UPDATE users SET password = ? WHERE id = ?`, [hashedPassword, userId], function (err) {
+      if (err) {
+        console.error('Errore aggiornamento password:', err.message);
+        return res.status(500).json({ message: 'Errore server' });
+      }
+      res.json({ message: 'Password aggiornata con successo' });
+    });
+  } catch (error) {
+    console.error("Errore hashing password:", error.message);
+    res.status(500).json({ message: "Errore server" });
   }
 });
 
