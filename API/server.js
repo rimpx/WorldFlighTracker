@@ -1,9 +1,10 @@
-const express = require('express');
-const bcrypt = require('bcrypt');
-const cors = require('cors');
-const session = require('express-session');
-const sqlite3 = require('sqlite3').verbose();
-const MockDB = require('./mock'); // Importa il MockDB
+import express from 'express';
+import bcrypt from 'bcrypt';
+import cors from 'cors';
+import session from 'express-session';
+import sqlite3 from 'sqlite3';
+import fetch from 'node-fetch';
+import MockDB from './mock.js';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -13,7 +14,7 @@ const saltRounds = 10;
 app.use(express.json());
 app.use(
   cors({
-    origin: ['http://localhost:8080', 'https://www.rimpici.it'], // Permetti sia localhost che il dominio di produzione
+    origin: ['http://localhost:8080', 'https://www.rimpici.it'], // Permetti localhost e produzione
     credentials: true,
   })
 );
@@ -36,7 +37,7 @@ let db;
 
 if (useMockDB) {
   console.log('Usando il Mock Database');
-  db = new MockDB(); // Crea un'istanza del mock database
+  db = new MockDB(); // Usa il mock database
 } else {
   console.log('Usando SQLite Database');
   db = new sqlite3.Database('./database.db', (err) => {
@@ -44,7 +45,6 @@ if (useMockDB) {
     else console.log('Connesso al database SQLite principale.');
   });
 
-  // Se usi SQLite, aggiorna la tabella degli utenti
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +57,6 @@ if (useMockDB) {
     )
   `);
 }
-
 
 // Endpoint per la registrazione
 app.post('/register', async (req, res) => {
@@ -145,7 +144,6 @@ app.post('/logout', (req, res) => {
 });
 
 // Endpoint di controllo sessione
-// Endpoint di controllo sessione
 app.get('/session', (req, res) => {
   console.log('Verifica sessione:', req.session);
 
@@ -201,7 +199,6 @@ app.get('/admin/users', (req, res) => {
 });
 
 // Endpoint per filtrare gli utenti in base all'aeroporto (solo admin)
-// Endpoint per filtrare gli utenti in base all'aeroporto (solo admin)
 app.get('/admin/users/filter', isAdmin, (req, res) => {
   const { airport } = req.query;
 
@@ -238,18 +235,71 @@ app.delete('/admin/users/:id', isAdmin, (req, res) => {
   });
 });
 
+// Endpoint per cercare un volo
+const flightCache = {};
+
+
+app.get('/api/flights/:flightCode', async (req, res) => {
+  const { flightCode } = req.params;
+
+  // Controlla se il volo è già nella cache
+  if (flightCache[flightCode]) {
+    console.log('Dati del volo presi dalla cache');
+    return res.json(flightCache[flightCode]);
+  }
+
+  try {
+    // Chiave API - assicurati di sostituirla con la tua
+    const API_KEY = 'AAAAAAAA';
+
+    // Richiesta all'API esterna
+    const response = await fetch(
+      `https://api.aviationstack.com/v1/flights?access_key=${API_KEY}&flight_iata=${flightCode}`
+    );
+
+    if (!response.ok) {
+      return res.status(response.status).json({ message: 'Errore nella richiesta all’API esterna' });
+    }
+
+    const data = await response.json();
+
+    // Controlla se ci sono risultati
+    if (!data || !data.data || data.data.length === 0) {
+      return res.status(404).json({ message: 'Volo non trovato' });
+    }
+
+    // Prendi il primo risultato
+    const flightInfo = data.data[0];
+
+    // Salva i dati del volo in memoria (cache)
+    flightCache[flightCode] = flightInfo;
+
+    console.log('Dati del volo salvati in cache');
+    res.json(flightInfo);
+  } catch (error) {
+    console.error('Errore nella ricerca del volo:', error.message);
+    res.status(500).json({ message: 'Errore del server' });
+  }
+});
+
 // Gestione della chiusura del database
 process.on('SIGINT', () => {
-  db.close((err) => {
-    if (err) {
-      console.error('Errore durante la chiusura del database:', err.message);
-    }
-    console.log('Connessione al database chiusa.');
+  if (!useMockDB) {
+    db.close((err) => {
+      if (err) {
+        console.error('Errore durante la chiusura del database:', err.message);
+      }
+      console.log('Connessione al database chiusa.');
+      process.exit(0);
+    });
+  } else {
+    console.log('Mock database chiuso.');
     process.exit(0);
-  });
+  }
 });
 
 // Avvio del server
 app.listen(port, () => {
   console.log(`Server in esecuzione su http://localhost:${port}`);
 });
+
