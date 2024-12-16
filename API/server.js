@@ -1,8 +1,9 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcrypt');
 const cors = require('cors');
 const session = require('express-session');
+const sqlite3 = require('sqlite3').verbose();
+const MockDB = require('./mock'); // Importa il MockDB
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -30,27 +31,33 @@ app.use(
   })
 );
 
-// Database setup
-let db = new sqlite3.Database('./database.db', (err) => {
-  if (err) {
-    console.error('Errore durante la connessione al database:', err.message);
-  } else {
-    console.log('Connesso al database SQLite principale.');
-  }
-});
+const useMockDB = process.env.USE_MOCK_DB === 'true';
+let db;
 
-// Aggiorna la tabella users per includere il campo is_admin
-db.run(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    email TEXT,
-    password TEXT NOT NULL,
-    age INTEGER NOT NULL CHECK(age >= 16),
-    favorite_airport TEXT NOT NULL,
-    is_admin BOOLEAN NOT NULL DEFAULT 0
-  )
-`);
+if (useMockDB) {
+  console.log('Usando il Mock Database');
+  db = new MockDB(); // Crea un'istanza del mock database
+} else {
+  console.log('Usando SQLite Database');
+  db = new sqlite3.Database('./database.db', (err) => {
+    if (err) console.error('Errore durante la connessione al database:', err.message);
+    else console.log('Connesso al database SQLite principale.');
+  });
+
+  // Se usi SQLite, aggiorna la tabella degli utenti
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE,
+      email TEXT,
+      password TEXT NOT NULL,
+      age INTEGER NOT NULL CHECK(age >= 16),
+      favorite_airport TEXT NOT NULL,
+      is_admin BOOLEAN NOT NULL DEFAULT 0
+    )
+  `);
+}
+
 
 // Endpoint per la registrazione
 app.post('/register', async (req, res) => {
@@ -60,26 +67,26 @@ app.post('/register', async (req, res) => {
     return res.status(400).json({ message: 'Tutti i campi sono obbligatori' });
   }
 
-  if (age < 16) {
-    return res.status(400).json({ message: "L'età minima è di 16 anni" });
-  }
-
   try {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    db.run(
-      `INSERT INTO users (username, email, password, age, favorite_airport, is_admin) VALUES (?, ?, ?, ?, ?, 0)`,
-      [username, email, hashedPassword, age, favorite_airport],
-      function (err) {
-        if (err) {
-          console.error('Errore durante la registrazione:', err.message);
-          return res.status(500).json({ message: 'Errore del server' });
+    if (useMockDB) {
+      db.createUser({ username, email, password: hashedPassword, is_admin: false });
+      res.status(201).json({ message: 'Utente registrato con successo' });
+    } else {
+      db.run(
+        `INSERT INTO users (username, email, password, age, favorite_airport, is_admin) VALUES (?, ?, ?, ?, ?, 0)`,
+        [username, email, hashedPassword, age, favorite_airport],
+        function (err) {
+          if (err) {
+            console.error('Errore durante la registrazione:', err.message);
+            return res.status(500).json({ message: 'Errore del server' });
+          }
+          res.status(201).json({ message: 'Utente registrato con successo', id: this.lastID });
         }
-        res.status(201).json({ message: 'Utente registrato con successo', id: this.lastID });
-      }
-    );
+      );
+    }
   } catch (error) {
-    console.error('Errore durante l\'hashing della password:', error.message);
     res.status(500).json({ message: 'Errore del server' });
   }
 });
@@ -94,43 +101,35 @@ function isAdmin(req, res, next) {
 }
 
 // Endpoint per il login
-app.post('/login', (req, res) => {
+// Endpoint per il login
+app.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ message: 'Email e password sono obbligatori' });
   }
 
-  db.get(
-    `SELECT * FROM users WHERE email = ?`,
-    [email],
-    async (err, user) => {
-      if (err) {
-        console.error('Errore durante il login:', err.message);
-        return res.status(500).json({ message: 'Errore del server' });
-      }
-
-      if (!user) {
-        return res.status(404).json({ message: 'Utente non trovato' });
-      }
-
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-
-      if (!isPasswordValid) {
-        return res.status(401).json({ message: 'Credenziali non valide' });
-      }
-
-      req.session.user = {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        is_admin: user.is_admin, // Deve essere presente
-      };
-
-      console.log('Sessione impostata:', req.session.user); // Log sessione dopo login
-      res.json({ message: 'Login riuscito', user: req.session.user });
+  let user;
+  if (useMockDB) {
+    user = db.getUserByEmail(email);
+    if (user && user.password === password) { // Confronto diretto per il mock
+      req.session.user = { id: user.id, username: user.username, is_admin: user.is_admin };
+      return res.json({ message: 'Login riuscito', user: req.session.user });
     }
-  );
+  } else {
+    user = await new Promise((resolve, reject) => {
+      db.get(`SELECT * FROM users WHERE email = ?`, [email], (err, row) => {
+        if (err) reject(err);
+        resolve(row);
+      });
+    });
+    if (user && await bcrypt.compare(password, user.password)) {
+      req.session.user = { id: user.id, username: user.username, is_admin: user.is_admin };
+      return res.json({ message: 'Login riuscito', user: req.session.user });
+    }
+  }
+
+  return res.status(401).json({ message: 'Credenziali non valide' });
 });
 
 // Endpoint per il logout
@@ -146,52 +145,72 @@ app.post('/logout', (req, res) => {
 });
 
 // Endpoint di controllo sessione
+// Endpoint di controllo sessione
 app.get('/session', (req, res) => {
-  console.log('Verifica sessione:', req.session); // Log dettagliato della sessione
+  console.log('Verifica sessione:', req.session);
 
   if (!req.session.user || !req.session.user.id) {
     console.warn('Sessione non valida o utente non loggato');
     return res.status(401).json({ isAuthenticated: false, message: "Sessione non valida o utente non autenticato" });
   }
 
-  console.log('Recupero informazioni per ID utente:', req.session.user.id);
-
-  db.get(
-    `SELECT id, username, email, age, favorite_airport, is_admin FROM users WHERE id = ?`,
-    [req.session.user.id],
-    (err, user) => {
-      if (err) {
-        console.error('Errore SQL:', err.message);
-        return res.status(500).json({ message: 'Errore del server durante il recupero utente.' });
-      }
-
-      if (!user) {
-        console.warn(`Utente non trovato per ID ${req.session.user.id}`);
-        return res.status(404).json({ isAuthenticated: false, message: 'Utente non trovato' });
-      }
-
-      console.log('Utente trovato:', user);
+  if (useMockDB) {
+    const user = db.getUserById(req.session.user.id);
+    if (user) {
       res.json({ isAuthenticated: true, user });
+    } else {
+      res.status(404).json({ isAuthenticated: false, message: 'Utente non trovato nel mock DB' });
     }
-  );
+  } else {
+    db.get(
+      `SELECT id, username, email, age, favorite_airport, is_admin FROM users WHERE id = ?`,
+      [req.session.user.id],
+      (err, user) => {
+        if (err) {
+          console.error('Errore SQL:', err.message);
+          return res.status(500).json({ message: 'Errore del server durante il recupero utente.' });
+        }
+
+        if (!user) {
+          console.warn(`Utente non trovato per ID ${req.session.user.id}`);
+          return res.status(404).json({ isAuthenticated: false, message: 'Utente non trovato' });
+        }
+
+        console.log('Utente trovato:', user);
+        res.json({ isAuthenticated: true, user });
+      }
+    );
+  }
 });
 
 // Endpoint per ottenere tutti gli utenti (solo admin)
-app.get('/admin/users', isAdmin, (req, res) => {
-  db.all(`SELECT id, username, email, age, favorite_airport FROM users`, (err, users) => {
-    if (err) {
-      console.error('Errore nel recupero degli utenti:', err.message);
-      return res.status(500).json({ message: 'Errore del server' });
-    }
+app.get('/admin/users', (req, res) => {
+  if (!req.session.user || !req.session.user.is_admin) {
+    return res.status(403).json({ message: 'Accesso negato. Non sei un admin.' });
+  }
+
+  const users = useMockDB ? db.getAllUsers() : [];
+  if (useMockDB) {
     res.json(users);
-  });
+  } else {
+    db.all(`SELECT id, username, email, age, favorite_airport FROM users`, (err, rows) => {
+      if (err) return res.status(500).json({ message: 'Errore del server' });
+      res.json(rows);
+    });
+  }
 });
 
+// Endpoint per filtrare gli utenti in base all'aeroporto (solo admin)
 // Endpoint per filtrare gli utenti in base all'aeroporto (solo admin)
 app.get('/admin/users/filter', isAdmin, (req, res) => {
   const { airport } = req.query;
 
   if (!airport) return res.status(400).json({ message: "Aeroporto mancante per il filtro." });
+
+  if (useMockDB) {
+    const filteredUsers = db.getAllUsers().filter(user => user.favorite_airport === airport);
+    return res.json(filteredUsers);
+  }
 
   db.all(
     `SELECT id, username, email, age, favorite_airport FROM users WHERE favorite_airport = ?`,
