@@ -5,6 +5,8 @@ import session from 'express-session';
 import sqlite3 from 'sqlite3';
 import fetch from 'node-fetch';
 import MockDB from './mock.js';
+import swaggerJSDoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -32,6 +34,25 @@ app.use(
   })
 );
 
+// Configurazione di Swagger
+const swaggerOptions = {
+  swaggerDefinition: {
+    openapi: "3.0.0",
+    info: {
+      title: "WorldFlightTracker API",
+      version: "1.0.0",
+      description: "Documentazione dell'API per il monitoraggio voli e gestione utenti",
+    },
+    servers: [
+      { url: "http://localhost:3000", description: "Local server" }
+    ],
+  },
+  apis: ["./server.js"], // Percorso del file contenente le annotazioni
+};
+
+const swaggerDocs = swaggerJSDoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+
 const useMockDB = process.env.USE_MOCK_DB === 'true';
 let db;
 
@@ -58,6 +79,38 @@ if (useMockDB) {
   `);
 }
 
+
+/**
+ * @swagger
+ * /register:
+ *   post:
+ *     summary: Registra un nuovo utente
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               username:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               age:
+ *                 type: integer
+ *               favorite_airport:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Utente registrato con successo
+ *       400:
+ *         description: Campi mancanti o non validi
+ *       500:
+ *         description: Errore del server
+ */
 // Endpoint per la registrazione
 app.post('/register', async (req, res) => {
   const { username, email, password, age, favorite_airport } = req.body;
@@ -99,7 +152,31 @@ function isAdmin(req, res, next) {
   }
 }
 
-// Endpoint per il login
+/**
+ * @swagger
+ * /login:
+ *   post:
+ *     summary: Login utente
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login riuscito
+ *       401:
+ *         description: Credenziali non valide
+ *       500:
+ *         description: Errore del server
+ */
 // Endpoint per il login
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -131,6 +208,18 @@ app.post('/login', async (req, res) => {
   return res.status(401).json({ message: 'Credenziali non valide' });
 });
 
+/**
+ * @swagger
+ * /logout:
+ *   post:
+ *     summary: Logout utente
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Logout effettuato con successo
+ *       500:
+ *         description: Errore del server
+ */
 // Endpoint per il logout
 app.post('/logout', (req, res) => {
   req.session.destroy((err) => {
@@ -143,6 +232,18 @@ app.post('/logout', (req, res) => {
   });
 });
 
+/**
+ * @swagger
+ * /session:
+ *   get:
+ *     summary: Controlla la sessione utente
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Utente autenticato
+ *       401:
+ *         description: Sessione non valida o utente non loggato
+ */
 // Endpoint di controllo sessione
 app.get('/session', (req, res) => {
   console.log('Verifica sessione:', req.session);
@@ -181,6 +282,21 @@ app.get('/session', (req, res) => {
   }
 });
 
+
+/**
+ * @swagger
+ * /admin/users:
+ *   get:
+ *     summary: Ottiene tutti gli utenti (solo admin)
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: Lista degli utenti
+ *       403:
+ *         description: Accesso negato
+ *       500:
+ *         description: Errore del server
+ */
 // Endpoint per ottenere tutti gli utenti (solo admin)
 app.get('/admin/users', (req, res) => {
   if (!req.session.user || !req.session.user.is_admin) {
@@ -198,6 +314,52 @@ app.get('/admin/users', (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /admin/users/filter:
+ *   get:
+ *     summary: Filtra gli utenti in base all'aeroporto preferito (solo admin)
+ *     tags: [Admin]
+ *     parameters:
+ *       - name: airport
+ *         in: query
+ *         required: true
+ *         description: Codice IATA dell'aeroporto preferito
+ *         schema:
+ *           type: string
+ *           example: BGY
+ *     responses:
+ *       200:
+ *         description: Utenti filtrati con successo
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                     example: 1
+ *                   username:
+ *                     type: string
+ *                     example: "RiccardoR"
+ *                   email:
+ *                     type: string
+ *                     example: "riccardo@example.com"
+ *                   age:
+ *                     type: integer
+ *                     example: 25
+ *                   favorite_airport:
+ *                     type: string
+ *                     example: "BGY"
+ *       400:
+ *         description: Aeroporto mancante per il filtro
+ *       403:
+ *         description: Accesso negato, utente non admin
+ *       500:
+ *         description: Errore del server
+ */
 // Endpoint per filtrare gli utenti in base all'aeroporto (solo admin)
 app.get('/admin/users/filter', isAdmin, (req, res) => {
   const { airport } = req.query;
@@ -222,6 +384,37 @@ app.get('/admin/users/filter', isAdmin, (req, res) => {
   );
 });
 
+
+/**
+ * @swagger
+ * /admin/users/{id}:
+ *   delete:
+ *     summary: Elimina un utente specifico (solo admin)
+ *     tags: [Admin]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: ID univoco dell'utente da eliminare
+ *         schema:
+ *           type: integer
+ *           example: 1
+ *     responses:
+ *       200:
+ *         description: Utente eliminato con successo
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Utente eliminato con successo"
+ *       403:
+ *         description: Accesso negato, utente non admin
+ *       500:
+ *         description: Errore del server
+ */
 // Endpoint per eliminare un utente (solo admin)
 app.delete('/admin/users/:id', isAdmin, (req, res) => {
   const userId = req.params.id;
@@ -238,7 +431,27 @@ app.delete('/admin/users/:id', isAdmin, (req, res) => {
 // Endpoint per cercare un volo
 const flightCache = {};
 
-
+/**
+ * @swagger
+ * /api/flights/{flightCode}:
+ *   get:
+ *     summary: Recupera informazioni di un volo specifico
+ *     tags: [Flights]
+ *     parameters:
+ *       - name: flightCode
+ *         in: path
+ *         required: true
+ *         description: Codice IATA del volo
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Dati del volo recuperati con successo
+ *       404:
+ *         description: Volo non trovato
+ *       500:
+ *         description: Errore del server
+ */
 app.get('/api/flights/:flightCode', async (req, res) => {
   const { flightCode } = req.params;
 
@@ -250,7 +463,7 @@ app.get('/api/flights/:flightCode', async (req, res) => {
 
   try {
     // Chiave API - assicurati di sostituirla con la tua
-    const API_KEY = 'AAAAAAAA';
+    const API_KEY = '6db322597de800444c5f04a4a7b9c27b';
 
     // Richiesta all'API esterna
     const response = await fetch(
@@ -302,4 +515,3 @@ process.on('SIGINT', () => {
 app.listen(port, () => {
   console.log(`Server in esecuzione su http://localhost:${port}`);
 });
-
