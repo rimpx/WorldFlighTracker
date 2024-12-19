@@ -116,30 +116,38 @@ app.post('/register', async (req, res) => {
   const { username, email, password, age, favorite_airport } = req.body;
 
   if (!username || !email || !password || !age || !favorite_airport) {
-    return res.status(400).json({ message: 'Tutti i campi sono obbligatori' });
+    return res.status(400).json({ message: 'Tutti i campi sono obbligatori.' });
   }
 
   try {
+    // Verifica se l'email è già registrata
+    const emailExists = await new Promise((resolve, reject) => {
+      db.get(`SELECT id FROM users WHERE email = ?`, [email], (err, row) => {
+        if (err) reject(err);
+        resolve(!!row);
+      });
+    });
+
+    if (emailExists) {
+      return res.status(400).json({ message: 'Email già registrata.' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    if (useMockDB) {
-      db.createUser({ username, email, password: hashedPassword, is_admin: false });
-      res.status(201).json({ message: 'Utente registrato con successo' });
-    } else {
-      db.run(
-        `INSERT INTO users (username, email, password, age, favorite_airport, is_admin) VALUES (?, ?, ?, ?, ?, 0)`,
-        [username, email, hashedPassword, age, favorite_airport],
-        function (err) {
-          if (err) {
-            console.error('Errore durante la registrazione:', err.message);
-            return res.status(500).json({ message: 'Errore del server' });
-          }
-          res.status(201).json({ message: 'Utente registrato con successo', id: this.lastID });
+    db.run(
+      `INSERT INTO users (username, email, password, age, favorite_airport, is_admin) VALUES (?, ?, ?, ?, ?, 0)`,
+      [username, email, hashedPassword, age, favorite_airport],
+      function (err) {
+        if (err) {
+          console.error('Errore durante la registrazione:', err.message);
+          return res.status(500).json({ message: 'Errore del server.' });
         }
-      );
-    }
+        res.status(201).json({ message: 'Utente registrato con successo.', id: this.lastID });
+      }
+    );
   } catch (error) {
-    res.status(500).json({ message: 'Errore del server' });
+    console.error('Errore durante la registrazione:', error.message);
+    res.status(500).json({ message: 'Errore del server.' });
   }
 });
 
@@ -387,6 +395,77 @@ app.get('/admin/users/filter', isAdmin, (req, res) => {
 
 /**
  * @swagger
+ * /admin/users/filter/email:
+ *   get:
+ *     summary: Filtra gli utenti in base all'email (solo admin)
+ *     tags: [Admin]
+ *     parameters:
+ *       - name: email
+ *         in: query
+ *         required: true
+ *         description: Email dell'utente da filtrare
+ *         schema:
+ *           type: string
+ *           example: riccardo@example.com
+ *     responses:
+ *       200:
+ *         description: Utenti filtrati con successo
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                     example: 1
+ *                   username:
+ *                     type: string
+ *                     example: "RiccardoR"
+ *                   email:
+ *                     type: string
+ *                     example: "riccardo@example.com"
+ *                   age:
+ *                     type: integer
+ *                     example: 25
+ *                   favorite_airport:
+ *                     type: string
+ *                     example: "BGY"
+ *       400:
+ *         description: Email mancante per il filtro
+ *       403:
+ *         description: Accesso negato, utente non admin
+ *       500:
+ *         description: Errore del server
+ */
+app.get('/admin/users/filter/email', isAdmin, (req, res) => {
+  const { email } = req.query;
+
+  if (!email) {
+    return res.status(400).json({ message: "Email mancante per il filtro." });
+  }
+
+  if (useMockDB) {
+    const filteredUsers = db.getAllUsers().filter(user => user.email === email);
+    return res.json(filteredUsers);
+  }
+
+  db.all(
+    `SELECT id, username, email, age, favorite_airport FROM users WHERE email = ?`,
+    [email],
+    (err, users) => {
+      if (err) {
+        console.error('Errore nel filtraggio utenti per email:', err.message);
+        return res.status(500).json({ message: 'Errore del server' });
+      }
+      res.json(users);
+    }
+  );
+});
+
+/**
+ * @swagger
  * /admin/users/{id}:
  *   delete:
  *     summary: Elimina un utente specifico (solo admin)
@@ -463,7 +542,7 @@ app.get('/api/flights/:flightCode', async (req, res) => {
 
   try {
     // Chiave API - assicurati di sostituirla con la tua
-    const API_KEY = '6db322597de800444c5f04a4a7b9c27b';
+    const API_KEY = 'AAAAAA';
 
     // Richiesta all'API esterna
     const response = await fetch(
@@ -511,7 +590,132 @@ process.on('SIGINT', () => {
   }
 });
 
+/**
+ * @swagger
+ * /update-password:
+ *   post:
+ *     summary: Aggiorna la password dell'utente autenticato
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 example: "nuova_password123"
+ *     responses:
+ *       200:
+ *         description: Password aggiornata con successo
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Password aggiornata con successo."
+ *       400:
+ *         description: Campi mancanti o non validi
+ *       401:
+ *         description: Utente non autenticato
+ *       500:
+ *         description: Errore del server
+ */
+app.post('/update-password', async (req, res) => {
+  const { password } = req.body;
+
+  if (!req.session.user) {
+    return res.status(401).json({ message: 'Devi essere autenticato per aggiornare la password.' });
+  }
+
+  if (!password) {
+    return res.status(400).json({ message: 'La password è obbligatoria.' });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    db.run(
+      `UPDATE users SET password = ? WHERE id = ?`,
+      [hashedPassword, req.session.user.id],
+      function (err) {
+        if (err) {
+          console.error('Errore durante l\'aggiornamento della password:', err.message);
+          return res.status(500).json({ message: 'Errore del server.' });
+        }
+        res.json({ message: 'Password aggiornata con successo.' });
+      }
+    );
+  } catch (error) {
+    console.error('Errore durante l\'hash della password:', error.message);
+    res.status(500).json({ message: 'Errore del server.' });
+  }
+});
+
+/**
+ * @swagger
+ * /update-airport:
+ *   post:
+ *     summary: Aggiorna l'aeroporto preferito dell'utente autenticato
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               airport:
+ *                 type: string
+ *                 example: "FCO"
+ *     responses:
+ *       200:
+ *         description: Aeroporto aggiornato con successo
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Aeroporto aggiornato con successo."
+ *       400:
+ *         description: Campi mancanti o non validi
+ *       401:
+ *         description: Utente non autenticato
+ *       500:
+ *         description: Errore del server
+ */
+app.post('/update-airport', (req, res) => {
+  const { airport } = req.body;
+
+  if (!req.session.user) {
+    return res.status(401).json({ message: 'Devi essere autenticato per aggiornare l\'aeroporto preferito.' });
+  }
+
+  if (!airport) {
+    return res.status(400).json({ message: 'L\'aeroporto è obbligatorio.' });
+  }
+
+  db.run(
+    `UPDATE users SET favorite_airport = ? WHERE id = ?`,
+    [airport, req.session.user.id],
+    function (err) {
+      if (err) {
+        console.error('Errore durante l\'aggiornamento dell\'aeroporto:', err.message);
+        return res.status(500).json({ message: 'Errore del server.' });
+      }
+      res.json({ message: 'Aeroporto aggiornato con successo.' });
+    }
+  );
+});
+
 // Avvio del server
 app.listen(port, () => {
   console.log(`Server in esecuzione su http://localhost:${port}`);
 });
+
+
