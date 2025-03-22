@@ -1,33 +1,29 @@
 <template>
   <div class="container">
-    <div class="app-name">
-      WORLDFLIGHTTRACKER
-    </div>
+    <div class="app-name">WORLDFLIGHTTRACKER</div>
     <div class="login-container">
       <h2>Accedi o Registrati</h2>
       <form @submit.prevent="isLogin ? loginUser() : registerUser()">
         <input v-if="!isLogin" type="text" v-model="nome" placeholder="Nome" class="input-field" required />
         <input v-if="!isLogin" type="text" v-model="cognome" placeholder="Cognome" class="input-field" required />
         <input v-if="!isLogin" type="number" v-model="eta" placeholder="Età" class="input-field" required />
-        <input v-if="!isLogin" type="text" v-model="aeroporto_preferenza" placeholder="Aeroporto Preferito"
-          class="input-field" />
+        <input v-if="!isLogin" type="text" v-model="aeroporto_preferenza" placeholder="Aeroporto Preferito" class="input-field" />
         <input type="email" v-model="email" placeholder="Email" class="input-field" required />
         <input type="password" v-model="password" placeholder="Password" class="input-field" required />
-        <button type="submit" class="login-button">
-          {{ isLogin ? 'Login' : 'Register' }}
-        </button>
-        <button @click.prevent="toggleMode" class="toggle-button">
-          {{ isLogin ? 'Passa a Registrati' : 'Passa a Login' }}
-        </button>
-        <p v-if="message" :class="{ 'error-message': isError, 'success-message': !isError }">
-          {{ message }}
-        </p>
+        <button type="submit" class="login-button">{{ isLogin ? 'Login' : 'Register' }}</button>
+        <button @click.prevent="toggleMode" class="toggle-button">{{ isLogin ? 'Passa a Registrati' : 'Passa a Login' }}</button>
       </form>
+      <button @click="handleGoogleLogin" class="google-button">Accedi con Google</button>
+      <p v-if="message" :class="{ 'error-message': isError, 'success-message': !isError }">
+        {{ message }}
+      </p>
     </div>
   </div>
 </template>
 
 <script>
+import { useGoogleLogin } from 'vue3-google-login';
+
 export default {
   data() {
     return {
@@ -56,81 +52,33 @@ export default {
       this.email = "";
       this.password = "";
     },
-    async registerUser() {
-      const userData = {
-        username: this.nome + this.cognome,  // Mappato a 'username' per il server
-        email: this.email,
-        password: this.password,
-        age: this.eta,  // Mappato a 'age'
-        favorite_airport: this.aeroporto_preferenza, // Mappato a 'favorite_airport'
-      };
-
+    async handleGoogleLogin() {
       try {
-        const response = await fetch("http://localhost:3000/register", {
+        const googleUser = await useGoogleLogin().signIn();
+        console.log("Google User:", googleUser);
+        
+        const response = await fetch("http://localhost:3000/google-login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(userData),
+          body: JSON.stringify({ token: googleUser.credential }),
         });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
+        
+        if (!response.ok) throw new Error("Errore autenticazione Google");
+        
         const data = await response.json();
-        this.message = data.message || "Registrazione avvenuta con successo! Ora puoi accedere.";
-        this.isError = false;
-        this.toggleMode(); // Passa alla modalità login
-      } catch (error) {
-        this.message = "Errore durante la registrazione: " + error.message;
-        this.isError = true;
-      }
-    },
-    async loginUser() {
-      const loginData = {
-        email: this.email,
-        password: this.password,
-      };
-
-      try {
-        const response = await fetch("http://localhost:3000/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(loginData),
-          credentials: "include",
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        this.message = data.message || "Login effettuato con successo!";
-        this.isError = false;
-
-        // Salva i dettagli dell'utente nella sessione/localStorage
         sessionStorage.setItem("accountName", data.user.username);
-        sessionStorage.setItem("isAdmin", data.user.is_admin ? "true" : "false"); // Salva coerentemente
-        localStorage.setItem("user-token", "valid-token");
-
-        console.log("isAdmin salvato in sessionStorage:", sessionStorage.getItem("isAdmin"));
-
-        // Reindirizza l'utente alla pagina appropriata
-        if (data.user.is_admin) {
-          console.log("Reindirizzamento: admin");
-          this.$router.push("/admin");
-        } else {
-          console.log("Reindirizzamento: success");
-          this.$router.push("/success");
-        }
+        sessionStorage.setItem("isAdmin", data.user.is_admin ? "true" : "false");
+        localStorage.setItem("user-token", data.token);
+        
+        this.$router.push(data.user.is_admin ? "/admin" : "/success");
       } catch (error) {
-        this.message = "Errore nel login: " + error.message;
+        this.message = "Errore con Google Sign-In: " + error.message;
         this.isError = true;
       }
     },
   },
 };
 </script>
-
 
 <style scoped>
 .container {
@@ -168,7 +116,8 @@ export default {
 }
 
 .login-button,
-.toggle-button {
+.toggle-button,
+.google-button {
   width: 100%;
   padding: 10px;
   margin-top: 10px;
@@ -184,6 +133,10 @@ export default {
 
 .toggle-button {
   background-color: #555;
+}
+
+.google-button {
+  background-color: #db4437;
 }
 
 .error-message {

@@ -7,6 +7,9 @@ import fetch from 'node-fetch';
 import MockDB from './mock.js';
 import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
+import passport from 'passport';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -32,6 +35,45 @@ app.use(
       maxAge: 24 * 60 * 60 * 1000, // 1 giorno
     },
   })
+);
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.serializeUser((user, done) => {
+  done(null, user);
+});
+
+passport.deserializeUser((user, done) => {
+  done(null, user);
+});
+
+passport.use(new GoogleStrategy({
+  clientID: 'IL_TUO_GOOGLE_CLIENT_ID', // Sostituisci con il tuo Client ID
+  clientSecret: 'IL_TUO_GOOGLE_CLIENT_SECRET', // Sostituisci con il tuo Client Secret
+  callbackURL: '/auth/google/callback'
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    // Qui puoi implementare la logica per gestire l'utente.
+    // Ad esempio, cercare l'utente nel database usando il profile.id o profile.emails[0].value.
+    // Se l'utente non esiste, potresti crearlo.
+    // Esempio:
+    // const user = await db.findOrCreate({ googleId: profile.id, email: profile.emails[0].value });
+    
+    // Per semplicità, in questo esempio restituiamo direttamente il profilo
+    return done(null, profile);
+  } catch (error) {
+    return done(error, null);
+  }
+}));
+
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+app.get('/auth/google/callback', 
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  (req, res) => {
+    // Se l'autenticazione ha successo, reindirizza dove preferisci (es. home page)
+  }
 );
 
 // Configurazione di Swagger
