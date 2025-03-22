@@ -10,10 +10,21 @@
         <input v-if="!isLogin" type="text" v-model="aeroporto_preferenza" placeholder="Aeroporto Preferito" class="input-field" />
         <input type="email" v-model="email" placeholder="Email" class="input-field" required />
         <input type="password" v-model="password" placeholder="Password" class="input-field" required />
-        <button type="submit" class="login-button">{{ isLogin ? 'Login' : 'Register' }}</button>
-        <button @click.prevent="toggleMode" class="toggle-button">{{ isLogin ? 'Passa a Registrati' : 'Passa a Login' }}</button>
+        <button type="submit" class="login-button">
+          {{ isLogin ? 'Login' : 'Register' }}
+        </button>
+        <button @click.prevent="toggleMode" class="toggle-button">
+          {{ isLogin ? 'Passa a Registrati' : 'Passa a Login' }}
+        </button>
       </form>
-      <button @click="handleGoogleLogin" class="google-button">Accedi con Google</button>
+
+      <!-- Pulsante Login con Google con clientId passato come prop -->
+      <GoogleLogin 
+        :callback="handleGoogleLogin" 
+        client-id="564606231029-f491m38591t9i831cntsg6jjhdp2vter.apps.googleusercontent.com" 
+        class="google-button" 
+      />
+
       <p v-if="message" :class="{ 'error-message': isError, 'success-message': !isError }">
         {{ message }}
       </p>
@@ -22,9 +33,12 @@
 </template>
 
 <script>
-import { useGoogleLogin } from 'vue3-google-login';
+import { GoogleLogin } from 'vue3-google-login';
 
 export default {
+  components: {
+    GoogleLogin
+  },
   data() {
     return {
       isLogin: true,
@@ -35,7 +49,7 @@ export default {
       email: "",
       password: "",
       message: "",
-      isError: false,
+      isError: false
     };
   },
   methods: {
@@ -52,35 +66,110 @@ export default {
       this.email = "";
       this.password = "";
     },
-    async handleGoogleLogin() {
+    async registerUser() {
+      // Implementa la registrazione utente qui
       try {
-        const googleUser = await useGoogleLogin().signIn();
-        console.log("Google User:", googleUser);
-        
-        const response = await fetch("http://localhost:3000/google-login", {
+        const userData = {
+          username: this.nome + this.cognome,
+          email: this.email,
+          password: this.password,
+          age: this.eta,
+          favorite_airport: this.aeroporto_preferenza
+        };
+
+        const response = await fetch("http://localhost:3000/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: googleUser.credential }),
+          body: JSON.stringify(userData)
         });
-        
-        if (!response.ok) throw new Error("Errore autenticazione Google");
-        
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const data = await response.json();
-        sessionStorage.setItem("accountName", data.user.username);
-        sessionStorage.setItem("isAdmin", data.user.is_admin ? "true" : "false");
-        localStorage.setItem("user-token", data.token);
-        
-        this.$router.push(data.user.is_admin ? "/admin" : "/success");
+        this.message = data.message || "Registrazione avvenuta con successo! Ora puoi accedere.";
+        this.isError = false;
+        this.toggleMode(); // Passa alla modalità login
       } catch (error) {
-        this.message = "Errore con Google Sign-In: " + error.message;
+        this.message = "Errore durante la registrazione: " + error.message;
         this.isError = true;
       }
     },
-  },
+    async loginUser() {
+      // Implementa il login tradizionale qui
+      try {
+        const loginData = {
+          email: this.email,
+          password: this.password
+        };
+
+        const response = await fetch("http://localhost:3000/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(loginData),
+          credentials: "include"
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        this.message = data.message || "Login effettuato con successo!";
+        this.isError = false;
+
+        // Salva i dettagli utente nella sessione/localStorage
+        sessionStorage.setItem("accountName", data.user.username);
+        sessionStorage.setItem("isAdmin", data.user.is_admin ? "true" : "false");
+        localStorage.setItem("user-token", "valid-token");
+
+        // Reindirizza l'utente alla pagina appropriata
+        this.$router.push(data.user.is_admin ? "/admin" : "/success");
+      } catch (error) {
+        this.message = "Errore nel login: " + error.message;
+        this.isError = true;
+      }
+    },
+    async handleGoogleLogin(response) {
+      console.log("Token ID ricevuto:", response.credential);
+      try {
+        const backendResponse = await fetch("http://localhost:3000/login/google", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: response.credential })
+        });
+
+        if (!backendResponse.ok) {
+          throw new Error(`Errore HTTP: ${backendResponse.status}`);
+        }
+        const data = await backendResponse.json();
+        this.message = data.message || "Login con Google effettuato!";
+        this.isError = false;
+
+        sessionStorage.setItem("accountName", data.user.username);
+        localStorage.setItem("user-token", "valid-token");
+
+        this.$router.push("/success");
+      } catch (error) {
+        this.message = "Errore nel login con Google: " + error.message;
+        this.isError = true;
+      }
+    }
+  }
 };
 </script>
 
 <style scoped>
+.google-button {
+  margin-top: 15px;
+  background-color: white;
+  color: black;
+  border: 1px solid #ccc;
+  padding: 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100%;
+}
+
 .container {
   display: flex;
   flex-direction: column;
@@ -116,8 +205,7 @@ export default {
 }
 
 .login-button,
-.toggle-button,
-.google-button {
+.toggle-button {
   width: 100%;
   padding: 10px;
   margin-top: 10px;
@@ -133,10 +221,6 @@ export default {
 
 .toggle-button {
   background-color: #555;
-}
-
-.google-button {
-  background-color: #db4437;
 }
 
 .error-message {
