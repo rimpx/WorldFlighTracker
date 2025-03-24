@@ -9,11 +9,34 @@ import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import { OAuth2Client } from 'google-auth-library';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import dotenv from 'dotenv';
+import SQLiteStoreFactory from 'connect-sqlite3'; // Importazione corretta
+dotenv.config();
 
+if (!process.env.SECRET_SESSION) {
+  throw new Error('SECRET_SESSION non è definita nel file .env');
+}
+
+//CHIAVI API
+const CLIENT_ID = process.env.CLIENT_ID;
+const API_KEY = process.env.API_KEY;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const SECRET_SESSION = process.env.SECRET_SESSION;
 
 const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
+
+// Configurazione del session store SQLite
+const SQLiteStore = SQLiteStoreFactory(session); // Utilizzo corretto
+const sessionStore = new SQLiteStore({
+  db: 'sessions.db', // Nome del file del database SQLite
+  table: 'sessions', // Nome della tabella per le sessioni
+  concurrentDB: true, // Abilita l'accesso concorrente al database
+});
 
 // Middleware
 app.use(express.json());
@@ -26,7 +49,8 @@ app.use(
 
 app.use(
   session({
-    secret: 'il-tuo-segreto-unico',
+    store: sessionStore,
+    secret: SECRET_SESSION,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -48,33 +72,216 @@ passport.deserializeUser((user, done) => {
   done(null, user);
 });
 
+
+// websocket
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: ['http://localhost:8080', 'https://www.rimpici.it'],
+    credentials: true
+  }
+});
+
+// Variabili globali per tracciare le connessioni
+const activeConnections = new Set(); // Traccia tutte le connessioni attive
+const adminConnections = new Set(); // Traccia solo le connessioni degli admin
+let visitorCount = 0; // Contatore dei visitatori
+
+// Middleware per gestire la sessione utente nelle connessioni WebSocket
+io.use(async (socket, next) => {
+  try {
+    const sessionCookie = socket.handshake.headers.cookie;
+    if (!sessionCookie) return next(); // Consenti connessioni senza cookie
+
+    // Estrai il sessionID dal cookie
+    const sessionID = sessionCookie.split('connect.sid=')[1]?.split(';')[0];
+    if (!sessionID) return next(); // Prosegui anche se il cookie non è presente
+
+    // Recupera la sessione dal session store
+    const sessionStore = app.get('sessionStore');
+    sessionStore.get(sessionID, (err, session) => {
+      if (err || !session) return next(); // Ignora errori e prosegui
+      socket.user = session.user || null; // Collega l'utente alla socket
+      next();
+    });
+  } catch (error) {
+    next(); // Consenti comunque la connessione
+  }
+});
+
+// Funzione per inviare aggiornamenti agli admin
+const emitToAdmins = () => {
+  adminConnections.forEach(socketId => {
+    io.to(socketId).emit('admin_visitor_count', visitorCount);
+  });
+};
+
+// Gestione delle connessioni WebSocket
+io.on('connection', (socket) => {
+  // Aggiungi la connessione alla lista delle connessioni attive
+  activeConnections.add(socket.id);
+  visitorCount = activeConnections.size;
+
+  // Se l'utente è un admin, aggiungi la connessione alla lista degli admin
+  if (socket.user?.is_admin) {
+    adminConnections.add(socket.id);
+    socket.emit('admin_visitor_count', visitorCount); // Invia il conteggio iniziale
+  }
+
+  // Invia aggiornamenti a tutti gli admin
+  emitToAdmins();
+
+  // Gestione della disconnessione
+  socket.on('disconnect', () => {
+    // Rimuovi la connessione dalla lista delle connessioni attive
+    activeConnections.delete(socket.id);
+    visitorCount = activeConnections.size;
+
+    // Se l'utente era un admin, rimuovi la connessione dalla lista degli admin
+    if (socket.user?.is_admin) {
+      adminConnections.delete(socket.id);
+    }
+
+    // Invia aggiornamenti a tutti gli admin
+    emitToAdmins();
+  });
+});
+
+
+// Configurazione di Passport per il login con Google
 passport.use(new GoogleStrategy({
-  clientID: 'IL_TUO_GOOGLE_CLIENT_ID', // Sostituisci con il tuo Client ID
-  clientSecret: 'IL_TUO_GOOGLE_CLIENT_SECRET', // Sostituisci con il tuo Client Secret
-  callbackURL: '/auth/google/callback'
+  clientID: CLIENT_ID, // Client ID da Google Cloud
+  clientSecret: CLIENT_SECRET, // Client Secret da Google Cloud
+  callbackURL: '/auth/google/callback' // URL di callback
 }, async (accessToken, refreshToken, profile, done) => {
   try {
-    // Qui puoi implementare la logica per gestire l'utente.
-    // Ad esempio, cercare l'utente nel database usando il profile.id o profile.emails[0].value.
-    // Se l'utente non esiste, potresti crearlo.
-    // Esempio:
-    // const user = await db.findOrCreate({ googleId: profile.id, email: profile.emails[0].value });
-    
-    // Per semplicità, in questo esempio restituiamo direttamente il profilo
-    return done(null, profile);
+    // Cerca l'utente nel database tramite l'email di Google
+    const email = profile.emails[0].value;
+    let user = await new Promise((resolve, reject) => {
+      db.get(`SELECT * FROM users WHERE email = ?`, [email], (err, row) => {
+        if (err) reject(err);
+        resolve(row);
+      });
+    });
+
+    // Se l'utente non esiste, crealo
+    if (!user) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO users (username, email, password, age, favorite_airport, is_admin) VALUES (?, ?, ?, ?, ?, 0)`,
+          [profile.displayName, email, '', 18, 'N/A'], // Valori di default
+          function (err) {
+            if (err) reject(err);
+            resolve();
+          }
+        );
+      });
+
+      // Recupera l'utente appena creato
+      user = await new Promise((resolve, reject) => {
+        db.get(`SELECT * FROM users WHERE email = ?`, [email], (err, row) => {
+          if (err) reject(err);
+          resolve(row);
+        });
+      });
+    }
+
+    // Restituisci l'utente a Passport
+    return done(null, user);
   } catch (error) {
     return done(error, null);
   }
 }));
 
+// Rotta per avviare il login con Google
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-app.get('/auth/google/callback', 
+// Rotta di callback dopo il login con Google
+app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/login' }),
   (req, res) => {
-    // Se l'autenticazione ha successo, reindirizza dove preferisci (es. home page)
+    // Salva l'utente nella sessione
+    req.session.user = { id: req.user.id, username: req.user.username, is_admin: req.user.is_admin };
   }
 );
+
+// Rotta per il login con Google tramite token ID (per client mobile o SPA)
+const client = new OAuth2Client(CLIENT_ID);
+/**
+ * @swagger
+ * /login/google:
+ *   post:
+ *     summary: Login con Google tramite token ID
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 example: "eyJhbGciOiJSUzI1NiIsImtpZCI6Ij..."
+ *     responses:
+ *       200:
+ *         description: Login con Google riuscito
+ *       401:
+ *         description: Autenticazione fallita
+ */
+app.post('/login/google', async (req, res) => {
+  const { token } = req.body; // Token ID inviato dal client
+
+  try {
+    // Verifica il token ID con Google
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { email, name } = payload; // Estrai i dati dell'utente
+
+    // Cerca l'utente nel database
+    let user = await new Promise((resolve, reject) => {
+      db.get(`SELECT * FROM users WHERE email = ?`, [email], (err, row) => {
+        if (err) reject(err);
+        resolve(row);
+      });
+    });
+
+    // Se l'utente non esiste, crealo
+    if (!user) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO users (username, email, password, age, favorite_airport, is_admin) VALUES (?, ?, ?, ?, ?, 0)`,
+          [name, email, '', 18, 'N/A'], // Valori di default
+          function (err) {
+            if (err) reject(err);
+            resolve();
+          }
+        );
+      });
+
+      // Recupera l'utente appena creato
+      user = await new Promise((resolve, reject) => {
+        db.get(`SELECT * FROM users WHERE email = ?`, [email], (err, row) => {
+          if (err) reject(err);
+          resolve(row);
+        });
+      });
+    }
+
+    // Salva l'utente nella sessione
+    req.session.user = { id: user.id, username: user.username, is_admin: user.is_admin };
+
+    // Risposta al client
+    res.json({ message: 'Login con Google riuscito', user: req.session.user });
+  } catch (error) {
+    console.error('Errore durante la verifica del token Google:', error);
+    res.status(401).json({ message: 'Autenticazione fallita' });
+  }
+});
 
 // Configurazione di Swagger
 const swaggerOptions = {
@@ -89,12 +296,14 @@ const swaggerOptions = {
       { url: "http://localhost:3000", description: "Local server" }
     ],
   },
-  apis: ["./server.js"], // Percorso del file contenente le annotazioni
+  apis: ["./server.js"], // Include le annotazioni da questo file
 };
 
 const swaggerDocs = swaggerJSDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
+
+//MOCK DB
 const useMockDB = process.env.USE_MOCK_DB === 'true';
 let db;
 
@@ -272,14 +481,26 @@ app.post('/login', async (req, res) => {
  */
 // Endpoint per il logout
 app.post('/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      console.error('Errore durante il logout:', err.message);
-      return res.status(500).json({ message: 'Errore del server' });
-    }
-    res.clearCookie('connect.sid');
-    res.json({ message: 'Logout effettuato con successo' });
+  // Cancella il cookie della sessione indipendentemente dalla sua esistenza
+  res.clearCookie('connect.sid', { 
+    path: '/',
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true
   });
+
+  // Se la sessione esiste, tentiamo di distruggerla
+  if (req.session) {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Errore durante la distruzione della sessione:', err.message);
+        return res.status(500).json({ message: 'Errore durante il logout' });
+      }
+      res.json({ message: 'Logout effettuato con successo' });
+    });
+  } else {
+    // Se non c'è una sessione, rispondi comunque con successo
+    res.json({ message: 'Logout effettuato con successo' });
+  }
 });
 
 /**
@@ -335,17 +556,22 @@ app.get('/session', (req, res) => {
 
 /**
  * @swagger
- * /admin/users:
+ * /admin/users/filter:
  *   get:
- *     summary: Ottiene tutti gli utenti (solo admin)
+ *     summary: Filtra gli utenti in base all'aeroporto preferito (solo admin)
  *     tags: [Admin]
+ *     parameters:
+ *       - name: airport
+ *         in: query
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: BGY
  *     responses:
  *       200:
- *         description: Lista degli utenti
+ *         description: Utenti filtrati con successo
  *       403:
  *         description: Accesso negato
- *       500:
- *         description: Errore del server
  */
 // Endpoint per ottenere tutti gli utenti (solo admin)
 app.get('/admin/users', (req, res) => {
@@ -353,15 +579,13 @@ app.get('/admin/users', (req, res) => {
     return res.status(403).json({ message: 'Accesso negato. Non sei un admin.' });
   }
 
-  const users = useMockDB ? db.getAllUsers() : [];
-  if (useMockDB) {
-    res.json(users);
-  } else {
-    db.all(`SELECT id, username, email, age, favorite_airport FROM users`, (err, rows) => {
-      if (err) return res.status(500).json({ message: 'Errore del server' });
-      res.json(rows);
-    });
-  }
+  db.all('SELECT id, username, email, age, favorite_airport, is_admin FROM users', (err, rows) => {
+    if (err) {
+      console.error('Errore nel recupero degli utenti:', err.message);
+      return res.status(500).json({ message: 'Errore del server' });
+    }
+    res.json(rows);
+  });
 });
 
 /**
@@ -549,6 +773,30 @@ app.delete('/admin/users/:id', isAdmin, (req, res) => {
   });
 });
 
+/**
+ * @swagger
+ * /admin/visitors:
+ *   get:
+ *     summary: Ottieni il conteggio visitatori in tempo reale (solo admin)
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: Conteggio visitatori
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 count:
+ *                   type: number
+ *                   example: 42
+ *       403:
+ *         description: Accesso negato
+ */
+app.get('/admin/visitors', isAdmin, (req, res) => {
+  res.json({ count: visitorCount });
+});
+
 // Endpoint per cercare un volo
 const flightCache = {};
 
@@ -576,37 +824,34 @@ const flightCache = {};
 app.get('/api/flights/:flightCode', async (req, res) => {
   const { flightCode } = req.params;
 
-  // Controlla se il volo è già nella cache
-  if (flightCache[flightCode]) {
+  // Controlla se il volo è già nella cache e se è ancora valido (es. 5 minuti)
+  if (flightCache[flightCode] && Date.now() - flightCache[flightCode].timestamp < 300000) {
     console.log('Dati del volo presi dalla cache');
-    return res.json(flightCache[flightCode]);
+    return res.json(flightCache[flightCode].data);
   }
 
   try {
-    // Chiave API - assicurati di sostituirla con la tua
-    const API_KEY = 'AAAAAA';
-
-    // Richiesta all'API esterna
     const response = await fetch(
       `https://api.aviationstack.com/v1/flights?access_key=${API_KEY}&flight_iata=${flightCode}`
     );
 
     if (!response.ok) {
-      return res.status(response.status).json({ message: 'Errore nella richiesta all’API esterna' });
+      throw new Error('Errore nella richiesta all’API esterna');
     }
 
     const data = await response.json();
 
-    // Controlla se ci sono risultati
     if (!data || !data.data || data.data.length === 0) {
       return res.status(404).json({ message: 'Volo non trovato' });
     }
 
-    // Prendi il primo risultato
     const flightInfo = data.data[0];
 
-    // Salva i dati del volo in memoria (cache)
-    flightCache[flightCode] = flightInfo;
+    // Salva i dati del volo in cache con un timestamp
+    flightCache[flightCode] = {
+      data: flightInfo,
+      timestamp: Date.now(),
+    };
 
     console.log('Dati del volo salvati in cache');
     res.json(flightInfo);
@@ -755,9 +1000,7 @@ app.post('/update-airport', (req, res) => {
   );
 });
 
-// Avvio del server
-app.listen(port, () => {
+
+httpServer.listen(port, () => {
   console.log(`Server in esecuzione su http://localhost:${port}`);
 });
-
-
