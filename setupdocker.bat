@@ -27,10 +27,13 @@ if not errorlevel 1 (
 
 echo Using Docker Compose command: %DOCKER_COMPOSE_CMD%
 
-rem Check if .env file exists
+rem Change to the API directory
+cd API
+
+rem Check if .env file exists in the API directory
 if not exist .env (
-    echo Error: .env file is missing
-    echo Please create a .env file with the required API configuration
+    echo Error: .env file is missing in the API directory
+    echo Please create a .env file with the required API configuration in the API directory
     pause
     exit /b 1
 )
@@ -54,5 +57,5 @@ if %errorlevel%==0 (
     echo Error: Services failed to start properly
     %DOCKER_COMPOSE_CMD% logs
     pause
-    exit /b 1
+    exit /b 1
 )
