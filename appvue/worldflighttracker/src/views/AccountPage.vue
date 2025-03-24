@@ -46,131 +46,250 @@
   
   <script>
   import Navbar from "@/components/AppNavbar.vue";
-  import { fetchUserData, useAuth } from "@/composables/useAuth";
-  
-  export default {
-    name: "AccountPage",
-    components: { Navbar },
-    data() {
-      return {
-        updatedAirport: "",
-        newPassword: "",
-        confirmPassword: "",
-        successMessage: "",
-      };
+import { fetchUserData, useAuth } from "@/composables/useAuth";
+import io from "socket.io-client"; // Importa Socket.IO
+
+export default {
+  name: "AccountPage",
+  components: { Navbar },
+  data() {
+    return {
+      updatedAirport: "",
+      newPassword: "",
+      confirmPassword: "",
+      successMessage: "",
+      socket: null, // Aggiungi socket come variabile
+    };
+  },
+  async mounted() {
+    await fetchUserData();
+    this.updatedAirport = this.user.favorite_airport;
+
+    // Connessione al server WebSocket
+    this.socket = io("http://localhost:3000", {
+      withCredentials: true, // Invia i cookie di sessione
+    });
+
+    // Notifica al server che l'utente è online
+    this.socket.emit("user_online");
+
+    // Gestione della disconnessione
+    this.socket.on("disconnect", () => {
+      console.log("Disconnesso dal server WebSocket");
+    });
+  },
+  beforeUnmount() {
+    // Chiudi la connessione WebSocket quando il componente viene smontato
+    if (this.socket) {
+      this.socket.disconnect();
+    }
+  },
+  computed: {
+    user() {
+      return useAuth().user.value;
     },
-    async mounted() {
-      await fetchUserData();
-      this.updatedAirport = this.user.favorite_airport;
-    },
-    computed: {
-      user() {
-        return useAuth().user.value; // Ottieni i dati utente
-      },
-    },
-    methods: {
-      async updateAirport() {
-        try {
-          const response = await fetch("http://localhost:3000/update-airport", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ airport: this.updatedAirport }),
-          });
-  
-          if (response.ok) {
-            this.successMessage = "Aeroporto aggiornato con successo!";
-            await fetchUserData();
-          } else {
-            alert("Errore nell'aggiornamento dell'aeroporto.");
-          }
-        } catch (error) {
-          console.error("Errore aggiornamento aeroporto:", error.message);
+  },
+  methods: {
+    async updateAirport() {
+      try {
+        const response = await fetch("http://localhost:3000/update-airport", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ airport: this.updatedAirport }),
+        });
+
+        if (response.ok) {
+          this.successMessage = "Aeroporto aggiornato con successo!";
+          await fetchUserData();
+        } else {
+          alert("Errore nell'aggiornamento dell'aeroporto.");
         }
-      },
-      async updatePassword() {
-        if (this.newPassword !== this.confirmPassword) {
-          alert("Le password non coincidono!");
-          return;
-        }
-        try {
-          const response = await fetch("http://localhost:3000/update-password", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ password: this.newPassword }),
-          });
-  
-          if (response.ok) {
-            this.successMessage = "Password aggiornata con successo!";
-            this.newPassword = "";
-            this.confirmPassword = "";
-          } else {
-            alert("Errore nell'aggiornamento della password.");
-          }
-        } catch (error) {
-          console.error("Errore aggiornamento password:", error.message);
-        }
-      },
+      } catch (error) {
+        console.error("Errore aggiornamento aeroporto:", error.message);
+      }
     },
-  };
+    async updatePassword() {
+      if (this.newPassword !== this.confirmPassword) {
+        alert("Le password non coincidono!");
+        return;
+      }
+      try {
+        const response = await fetch("http://localhost:3000/update-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ password: this.newPassword }),
+        });
+
+        if (response.ok) {
+          this.successMessage = "Password aggiornata con successo!";
+          this.newPassword = "";
+          this.confirmPassword = "";
+        } else {
+          alert("Errore nell'aggiornamento della password.");
+        }
+      } catch (error) {
+        console.error("Errore aggiornamento password:", error.message);
+      }
+    },
+  },
+};
   </script>
   
-  <style scoped>
-  /* Stili principali */
-  .container {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    background-color: #000;
+
+<style scoped>
+/* Stili base */
+.container {
+    min-height: 100vh;
+    background-color: #1a1a1a;
     color: white;
-  }
-  
-  .account-container {
+    font-family: 'Arial', sans-serif;
+}
+
+.account-container {
     display: flex;
-    gap: 20px;
-    padding: 20px 5%;
-    flex: 1;
-  }
-  
-  .info-section,
-  .edit-section {
-    background-color: #333;
+    gap: 30px;
+    padding: 30px 5%;
+    flex-wrap: wrap;
+}
+
+.info-section,
+.edit-section {
+    background-color: #2c2c2c;
     border-radius: 12px;
-    padding: 20px;
+    padding: 25px;
     flex: 1;
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.5);
-  }
-  
-  .success-message {
+    min-width: 300px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+h2 {
     color: #4CAF50;
-    margin-top: 10px;
-  }
-  
-  .form-group {
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+    border-bottom: 2px solid #4CAF50;
+    padding-bottom: 10px;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+li {
     margin: 15px 0;
-  }
-  
-  input {
-    display: block;
+    padding: 12px;
+    background-color: #333;
+    border-radius: 6px;
+}
+
+strong {
+    color: #4CAF50;
+    margin-right: 8px;
+}
+
+.form-group {
+    margin: 20px 0;
+}
+
+input {
     width: 100%;
-    padding: 10px;
-    margin-top: 5px;
-    border-radius: 5px;
-    border: none;
-  }
-  
-  .update-button {
+    padding: 12px;
+    margin: 8px 0;
+    border: 2px solid #4CAF50;
+    border-radius: 6px;
+    background-color: #333;
+    color: white;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+}
+
+input:focus {
+    border-color: #45a049;
+    outline: none;
+    box-shadow: 0 0 8px rgba(76,175,80,0.3);
+}
+
+.update-button {
     background-color: #4CAF50;
     color: white;
     border: none;
-    padding: 10px 15px;
-    border-radius: 5px;
+    padding: 12px 25px;
+    border-radius: 6px;
     cursor: pointer;
-    margin-top: 10px;
-  }
-  
-  .update-button:hover {
-    background-color: #388E3C;
-  }
-  </style>
+    font-weight: bold;
+    transition: all 0.3s ease;
+    width: 100%;
+}
+
+.update-button:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+.success-message {
+    color: #45a049;
+    margin-top: 15px;
+    padding: 12px;
+    background-color: rgba(69,160,73,0.1);
+    border-radius: 6px;
+    text-align: center;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .account-container {
+        flex-direction: column;
+        gap: 25px;
+        padding: 25px;
+    }
+
+    .info-section,
+    .edit-section {
+        min-width: auto;
+        width: 100%;
+    }
+
+    h2 {
+        font-size: 1.3rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .account-container {
+        padding: 15px;
+    }
+
+    li {
+        font-size: 0.9rem;
+        padding: 10px;
+    }
+
+    input {
+        padding: 10px;
+        font-size: 0.9rem;
+    }
+
+    .update-button {
+        padding: 10px 20px;
+        font-size: 0.9rem;
+    }
+
+    h2 {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .account-container {
+        padding: 10px;
+    }
+
+    .info-section,
+    .edit-section {
+        padding: 15px;
+    }
+}
+</style>
