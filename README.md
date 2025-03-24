@@ -52,6 +52,8 @@ Segui questi passaggi per configurare e avviare l'applicazione:
      ```
   5. Questo comando genererà un nuovo account admin con le credenziali che hai impostato nel codice.
 
+### 10. Provare api voli
+- Inerire nella barra di ricerca volo il codice del volo da cercare come FR3666
 
 ## Slogan
 **"Le informazioni di volo che desideri, sempre a portata di mano"**
