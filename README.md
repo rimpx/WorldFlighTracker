@@ -55,6 +55,9 @@ Segui questi passaggi per configurare e avviare l'applicazione:
 ### 10. Provare api voli
 - Inerire nella barra di ricerca volo il codice del volo da cercare come FR3666
 
+### 11. Visualizzazione swagger
+- Scrivere nella bartra di ricerca del motore di ricerca http://localhost:3000/api-docs/
+
 ## Slogan
 **"Le informazioni di volo che desideri, sempre a portata di mano"**
 
