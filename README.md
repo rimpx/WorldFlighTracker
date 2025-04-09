@@ -6,6 +6,58 @@
 ## Descrizione
 WorldFlightTracker è una piattaforma che permette di monitorare informazioni sui voli in tutti gli aeroporti del mondo, fornendo aggiornamenti in tempo reale su gate, orari, ritardi e durata del tragitto. La piattaforma offre anche informazioni dettagliate sui servizi aeroportuali e include recensioni verificate dai viaggiatori. Grazie a un'interfaccia intuitiva, è accessibile da qualsiasi dispositivo, mobile o desktop. Inoltre, consente agli utenti di condividere recensioni e esperienze, creando una community di viaggiatori con feedback reali.
 
+## Istruzioni per l'uso
+
+Segui questi passaggi per configurare e avviare l'applicazione:
+
+### 1. Scarica il progetto
+- Vai alla pagina del repository su GitHub e scarica il progetto come file ZIP.
+
+### 2. Estrai lo ZIP
+- Una volta scaricato il file ZIP, estrailo in una cartella di tua scelta sul tuo computer.
+
+### 3. Aggiungi il file `.env`
+- Nella cartella estratta, naviga nella sottocartella `API`.
+- All'interno di questa cartella, aggiungi un file `.env`.
+
+### 4. Installa Docker Desktop
+- Se non hai già Docker Desktop installato, scarica e installa Docker Desktop dal sito ufficiale: [Download Docker Desktop](https://www.docker.com/get-docker/).
+- Segui le istruzioni di installazione per il tuo sistema operativo.
+
+### 5. Avvia Docker Desktop
+- Una volta completata l'installazione, apri Docker Desktop sul tuo computer.
+
+### 6. Effettua il login su Docker Desktop
+- Se non hai già un account Docker, creane uno.
+- Esegui il login con le tue credenziali Docker nella dashboard di Docker Desktop.
+
+### 7. Avvia il file `.bat`
+- Dopo aver effettuato l'accesso e aver aperto Docker Desktop, naviga nella cartella dove hai estratto il progetto.
+- Fai doppio clic sul file `setupdocker.bat` per avviare i contenitori Docker.
+- Nella barra di ricerca di un motore di ricerca inserisci `http://localhost:8080/`.
+
+### 8. Accesso con account admin (opzionale)
+- Per provare l'accesso con un account admin preconfigurato, usa le seguenti credenziali:
+  - **Email**: `user@admin.it`
+  - **Password**: `admin`
+
+### 9. Crea un nuovo account admin (opzionale)
+- Se desideri generare un nuovo account admin, usa il file `addAdminuser.js`:
+  1. Apri Visual Studio Code e naviga nella cartella del progetto.
+  2. Modifica i parametri `email` e `password` all'interno del file `addAdminuser.js` con i dati desiderati.
+  3. Apri il terminale di Visual Studio Code.
+  4. Esegui il comando:
+     ```bash
+     node addAdminuser.js
+     ```
+  5. Questo comando genererà un nuovo account admin con le credenziali che hai impostato nel codice.
+
+### 10. Provare api voli
+- Inerire nella barra di ricerca volo il codice del volo da cercare come FR3666
+
+### 11. Visualizzazione swagger
+- Scrivere nella barra di ricerca del motore di ricerca http://localhost:3000/api-docs/
+
 ## Slogan
 **"Le informazioni di volo che desideri, sempre a portata di mano"**
 
