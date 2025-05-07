@@ -47,7 +47,7 @@
 <script>
 import Navbar from "@/components/AppNavbar.vue";
 import { fetchUserData, useAuth } from "@/composables/useAuth";
-import io from "socket.io-client"; // Importa Socket.IO
+// Rimosso l'import di socket.io-client
 
 export default {
   name: "AccountPage",
@@ -58,51 +58,54 @@ export default {
       newPassword: "",
       confirmPassword: "",
       successMessage: "",
-      socket: null, // Socket.io instance
+      apiBaseUrl: "" // Aggiunto per configurare l'URL dell'API
     };
   },
   async mounted() {
     try {
+      // Configura l'URL dell'API base
+      this.configureApiBaseUrl();
+      
       await fetchUserData();
       this.updatedAirport = this.user.favorite_airport;
-
-      // Inizializza la connessione WebSocket con opzioni di riconnessione
-      this.socket = io("http://localhost:3000", {
-        withCredentials: true, // Invia i cookie di sessione per l'autenticazione
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
-      });
       
-      // Log della connessione stabilita
-      this.socket.on('connect', () => {
-        console.log('Connesso al server WebSocket');
-      });
-      
-      // Gestione della disconnessione
-      this.socket.on("disconnect", () => {
-        console.log("Disconnesso dal server WebSocket");
-      });
+      // Rimossa l'inizializzazione della connessione WebSocket
     } catch (error) {
       console.error("Errore nel recupero delle informazioni utente:", error);
       alert("Errore nel recupero delle informazioni utente.");
     }
   },
-  beforeUnmount() {
-    // Chiudi la connessione WebSocket quando il componente viene smontato
-    if (this.socket) {
-      this.socket.disconnect();
-    }
-  },
+  // Rimosso il metodo beforeUnmount() per la disconnessione WebSocket
   computed: {
     user() {
       return useAuth().user.value;
     },
   },
   methods: {
+    // Aggiunto metodo per configurare l'URL dell'API
+    configureApiBaseUrl() {
+      // Strategia dinamica per determinare l'URL di base dell'API
+      const isHttps = window.location.protocol === 'https:';
+      
+      if (window.location.host.includes('.app.github.dev') || isHttps) {
+        const hostParts = window.location.host.split('-');
+        if (hostParts.length > 1) {
+          const portIndex = hostParts.length - 1;
+          hostParts[portIndex] = '3000';
+          this.apiBaseUrl = `${window.location.protocol}//${hostParts.join('-')}`;
+        } else {
+          this.apiBaseUrl = `${window.location.protocol}//${window.location.hostname}:3000`;
+        }
+      } else {
+        this.apiBaseUrl = 'http://localhost:3000';
+      }
+      
+      console.log(`API Base URL configurato: ${this.apiBaseUrl}`);
+    },
+  
     async updateAirport() {
       try {
-        const response = await fetch("http://localhost:3000/update-airport", {
+        const response = await fetch(`${this.apiBaseUrl}/update-airport`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -119,13 +122,14 @@ export default {
         console.error("Errore aggiornamento aeroporto:", error.message);
       }
     },
+    
     async updatePassword() {
       if (this.newPassword !== this.confirmPassword) {
         alert("Le password non coincidono!");
         return;
       }
       try {
-        const response = await fetch("http://localhost:3000/update-password", {
+        const response = await fetch(`${this.apiBaseUrl}/update-password`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -148,7 +152,7 @@ export default {
 </script>
 
 <style scoped>
-/* Stili base */
+/* Stili invariati */
 .container {
     min-height: 100vh;
     background-color: #1a1a1a;

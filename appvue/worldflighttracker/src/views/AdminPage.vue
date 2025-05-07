@@ -5,7 +5,7 @@
             <h1 class="title">PANNELLO AMMINISTRAZIONE</h1>
             <div class="header-controls">
                 <div class="visitor-counter">
-                    Visitatori online: {{ visitorCount }}
+                    Visitatori online: 0
                 </div>
                 <button @click="logout" class="logout-button">LOGOUT</button>
             </div>
@@ -127,7 +127,7 @@
 </template>
 
 <script>
-import io from 'socket.io-client';
+// Import di socket.io-client rimosso
 
 export default {
     name: "AdminPage",
@@ -139,9 +139,9 @@ export default {
             activeFilter: "airport", // Filtro attivo di default
             message: "",
             isError: false,
-            visitorCount: 0, // Contatore visitatori
-            activeUsers: [], // Lista di utenti attivi
-            socket: null, // Istanza Socket.io
+            visitorCount: 0, // Contatore visitatori statico
+            activeUsers: [], // Lista vuota di utenti attivi
+            apiBaseUrl: "", // URL base per le API
             newAdmin: {
                 username: "",
                 email: "",
@@ -152,36 +152,37 @@ export default {
         };
     },
     async mounted() {
+        // Configura l'URL dell'API
+        this.configureApiBaseUrl();
         await this.fetchUsers();
 
-        // Connessione al server WebSocket
-        this.socket = io('http://localhost:3000', {
-            withCredentials: true,
-            reconnection: true,
-            reconnectionAttempts: 5,
-            reconnectionDelay: 1000
-        });
-
-        // Ascolta gli aggiornamenti del contatore visitatori
-        this.socket.on('admin_visitor_count', (count) => {
-            this.visitorCount = count;
-        });
-        
-        // Ascolta gli aggiornamenti degli utenti attivi
-        this.socket.on('admin_active_users', (users) => {
-            this.activeUsers = users;
-        });
+        // Connessione WebSocket e listener rimossi
     },
-    beforeUnmount() {
-        // Chiudi la connessione WebSocket quando il componente viene smontato
-        if (this.socket) {
-            this.socket.disconnect();
-        }
-    },
+    // beforeUnmount rimosso poiché non c'è più alcun socket da disconnettere
     methods: {
+        configureApiBaseUrl() {
+            // Strategia dinamica per determinare l'URL di base dell'API
+            const isHttps = window.location.protocol === 'https:';
+            
+            if (window.location.host.includes('.app.github.dev') || isHttps) {
+                const hostParts = window.location.host.split('-');
+                if (hostParts.length > 1) {
+                    const portIndex = hostParts.length - 1;
+                    hostParts[portIndex] = '3000';
+                    this.apiBaseUrl = `${window.location.protocol}//${hostParts.join('-')}`;
+                } else {
+                    this.apiBaseUrl = `${window.location.protocol}//${window.location.hostname}:3000`;
+                }
+            } else {
+                this.apiBaseUrl = 'http://localhost:3000';
+            }
+            
+            console.log(`API Base URL configurato: ${this.apiBaseUrl}`);
+        },
+
         async fetchUsers() {
             try {
-                const response = await fetch("http://localhost:3000/admin/users", { credentials: "include" });
+                const response = await fetch(`${this.apiBaseUrl}/admin/users`, { credentials: "include" });
                 if (!response.ok) throw new Error(await response.text());
                 this.users = await response.json();
                 this.clearFilters();
@@ -209,7 +210,7 @@ export default {
 
             try {
                 const response = await fetch(
-                    `http://localhost:3000/admin/users/filter?airport=${encodeURIComponent(this.filterAirport)}`,
+                    `${this.apiBaseUrl}/admin/users/filter?airport=${encodeURIComponent(this.filterAirport)}`,
                     { credentials: "include" }
                 );
                 if (response.ok) {
@@ -238,7 +239,7 @@ export default {
 
             try {
                 const response = await fetch(
-                    `http://localhost:3000/admin/users/filter/email?email=${encodeURIComponent(this.filterEmail)}`,
+                    `${this.apiBaseUrl}/admin/users/filter/email?email=${encodeURIComponent(this.filterEmail)}`,
                     { credentials: "include" }
                 );
                 if (response.ok) {
@@ -267,7 +268,7 @@ export default {
             if (!confirm("Sei sicuro di voler eliminare questo utente?")) return;
 
             try {
-                const response = await fetch(`http://localhost:3000/admin/users/${userId}`, {
+                const response = await fetch(`${this.apiBaseUrl}/admin/users/${userId}`, {
                     method: "DELETE",
                     credentials: "include",
                 });
@@ -294,7 +295,7 @@ export default {
             }
 
             try {
-                const response = await fetch("http://localhost:3000/admin/create", {
+                const response = await fetch(`${this.apiBaseUrl}/admin/create`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     credentials: "include",
@@ -334,7 +335,7 @@ export default {
             }
         },
         logout() {
-            fetch("http://localhost:3000/logout", {
+            fetch(`${this.apiBaseUrl}/logout`, {
                 method: "POST",
                 credentials: "include",
             })

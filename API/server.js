@@ -11,7 +11,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { OAuth2Client } from 'google-auth-library';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
+//import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 import SQLiteStoreFactory from 'connect-sqlite3'; // Importazione corretta
 dotenv.config();
@@ -74,110 +74,76 @@ passport.deserializeUser((user, done) => {
 
 
 // websocket
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: ['http://localhost:8080', 'https://www.rimpici.it'],
-    credentials: true
-  }
-});
+//const httpServer = createServer(app);
+//const io = new Server(httpServer, {
+  //cors: {
+    //origin: ['http://localhost:8080', 'https://www.rimpici.it'],
+    //credentials: true
+  //}
+//});
 
 // Variabili globali per tracciare le connessioni
-const activeConnections = new Set(); // Traccia tutte le connessioni attive
-const adminConnections = new Set(); // Traccia solo le connessioni degli admin
-const activeUsers = new Map(); // Traccia utenti autenticati con i loro dati [socketId -> userData]
-let visitorCount = 0; // Contatore dei visitatori
+//const activeConnections = new Set(); // Traccia tutte le connessioni attive
+//const adminConnections = new Set(); // Traccia solo le connessioni degli admin
+//const activeUsers = new Map(); // Traccia utenti autenticati con i loro dati [socketId -> userData]
+//let visitorCount = 0; // Contatore dei visitatori
 
 // Middleware per gestire la sessione utente nelle connessioni WebSocket
-io.use(async (socket, next) => {
-  try {
-    const sessionCookie = socket.handshake.headers.cookie;
-    if (!sessionCookie) return next(); // Consenti connessioni senza cookie
+//io.use(async (socket, next) => {
+  //try {
+    //const sessionCookie = socket.handshake.headers.cookie;
+    //if (!sessionCookie) return next(); // Consenti connessioni senza cookie
 
     // Estrai il sessionID dal cookie
-    const sessionID = sessionCookie.split('connect.sid=')[1]?.split(';')[0];
-    if (!sessionID) return next(); // Prosegui anche se il cookie non è presente
+    //const sessionID = sessionCookie.split('connect.sid=')[1]?.split(';')[0];
+    //if (!sessionID) return next(); // Prosegui anche se il cookie non è presente
 
     // Recupera la sessione dal session store
-    const sessionStore = app.get('sessionStore');
-    sessionStore.get(sessionID, (err, session) => {
-      if (err || !session) return next(); // Ignora errori e prosegui
-      socket.user = session.user || null; // Collega l'utente alla socket
-      next();
-    });
-  } catch (error) {
-    next(); // Consenti comunque la connessione
-  }
-});
+    //const sessionStore = app.get('sessionStore');
+    //sessionStore.get(sessionID, (err, session) => {
+      //if (err || !session) return next(); // Ignora errori e prosegui
+      //socket.user = session.user || null; // Collega l'utente alla socket
+      //next();
+    //});
+  //} catch (error) {
+    //next(); // Consenti comunque la connessione
+  //}
+//});
 
 // Funzione per inviare aggiornamenti agli admin
-const emitToAdmins = () => {
+//const emitToAdmins = () => {
   // Prepara la lista di utenti attivi per gli admin
-  const activeUsersList = Array.from(activeUsers.values());
-  const visitorCount = activeConnections.size;
+  //const activeUsersList = Array.from(activeUsers.values());
+  //const visitorCount = activeConnections.size;
   
-  adminConnections.forEach(socketId => {
-    io.to(socketId).emit('admin_visitor_count', visitorCount);
-    io.to(socketId).emit('admin_active_users', activeUsersList);
-  });
-};
+  //adminConnections.forEach(socketId => {
+    //io.to(socketId).emit('admin_visitor_count', visitorCount);
+    //io.to(socketId).emit('admin_active_users', activeUsersList);
+  //});
+//};
 
 // Gestione delle connessioni WebSocket
-io.on('connection', (socket) => {
-  // Aggiungi la connessione alla lista delle connessioni attive
-  activeConnections.add(socket.id);
-  visitorCount = activeConnections.size;
+//io.on('connection', (socket) => {
+  //console.log('Nuova connessione WebSocket:', socket.id);
+  //activeConnections.add(socket.id); // Aggiungi la connessione attiva
 
-  // Se l'utente è autenticato, aggiungi i suoi dati alla mappa degli utenti attivi
-  if (socket.user) {
-    activeUsers.set(socket.id, {
-      id: socket.user.id,
-      username: socket.user.username || socket.user.email,
-      email: socket.user.email,
-      is_admin: socket.user.is_admin || false,
-      socketId: socket.id,
-      connectedAt: new Date()
-    });
-  } else {
-    // Aggiungi anche utenti anonimi alla mappa
-    activeUsers.set(socket.id, {
-      id: null,
-      username: 'Visitatore anonimo',
-      email: 'N/A',
-      is_admin: false,
-      socketId: socket.id,
-      connectedAt: new Date()
-    });
-  }
+  //socket.on('disconnect', () => {
+    //console.log('Disconnessione WebSocket:', socket.id);
+    //activeConnections.delete(socket.id); // Rimuovi la connessione attiva
+  //});
 
-  // Se l'utente è un admin, aggiungi la connessione alla lista degli admin
-  if (socket.user?.is_admin) {
-    adminConnections.add(socket.id);
-    socket.emit('admin_visitor_count', visitorCount); // Invia il conteggio iniziale
-    socket.emit('admin_active_users', Array.from(activeUsers.values())); // Invia la lista iniziale
-  }
-
-  // Invia aggiornamenti a tutti gli admin
-  emitToAdmins();
-
-  // Gestione della disconnessione
-  socket.on('disconnect', () => {
-    // Rimuovi la connessione dalla lista delle connessioni attive
-    activeConnections.delete(socket.id);
-    visitorCount = activeConnections.size;
-
-    // Rimuovi l'utente dalla mappa degli utenti attivi
-    activeUsers.delete(socket.id);
-
-    // Se l'utente era un admin, rimuovi la connessione dalla lista degli admin
-    if (socket.user?.is_admin) {
-      adminConnections.delete(socket.id);
-    }
-
-    // Invia aggiornamenti a tutti gli admin
-    emitToAdmins();
-  });
-});
+  //socket.on('user_connected', (userData) => {
+    //if (userData.is_admin) {
+      //adminConnections.add(socket.id); // Aggiungi alla lista admin
+    //}
+    //activeUsers.set(socket.id, userData); // Aggiungi l'utente alla mappa
+    //emitToAdmins(); // Invia aggiornamenti agli admin
+  //});
+  
+  //socket.on('user_disconnected', () => {
+    //activeUsers.delete(socket.id); // Rimuovi l'utente dalla mappa
+    //emitToAdmins(); // Invia aggiornamenti agli admin
+  //});
 
 // Configurazione di Passport per il login con Google
 passport.use(new GoogleStrategy({
@@ -235,6 +201,8 @@ app.get('/auth/google/callback',
     req.session.user = { id: req.user.id, username: req.user.username, is_admin: req.user.is_admin };
   }
 );
+
+
 
 // Rotta per il login con Google tramite token ID (per client mobile o SPA)
 const client = new OAuth2Client(CLIENT_ID);
@@ -361,6 +329,173 @@ if (useMockDB) {
   `);
 }
 
+
+// ============= GESTIONE VOLI PREFERITI =============
+
+// 1. Prima crea la tabella dei preferiti se non esiste già
+db.run(`CREATE TABLE IF NOT EXISTS favorite_flights (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  flight_key TEXT NOT NULL,
+  flight_data TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE(user_id, flight_key)
+)`, (err) => {
+  if (err) {
+    console.error('Errore durante la creazione della tabella favorite_flights:', err);
+  } else {
+    console.log('Tabella favorite_flights pronta o già esistente');
+  }
+});
+
+// 2. Middleware di autenticazione per proteggere gli endpoint
+const ensureAuthenticated = (req, res, next) => {
+  if (!req.session.user) {
+    return res.status(401).json({ message: 'Autenticazione richiesta' });
+  }
+  next();
+};
+
+// 3. Endpoint per ottenere tutti i voli preferiti dell'utente
+app.get('/api/favorites', ensureAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    
+    // Query per ottenere tutti i preferiti dell'utente
+    db.all(
+      'SELECT flight_data FROM favorite_flights WHERE user_id = ? ORDER BY created_at DESC',
+      [userId],
+      (err, rows) => {
+        if (err) {
+          console.error('Errore nel recupero dei voli preferiti:', err);
+          return res.status(500).json({ message: 'Errore nel recupero dei preferiti' });
+        }
+        
+        // Trasforma i dati JSON memorizzati in oggetti
+        const favorites = rows.map(row => JSON.parse(row.flight_data));
+        res.json(favorites);
+      }
+    );
+  } catch (error) {
+    console.error('Errore nell\'endpoint GET favorites:', error);
+    res.status(500).json({ message: 'Errore interno del server' });
+  }
+});
+
+// 4. Endpoint per aggiungere un volo ai preferiti
+app.post('/api/favorites', ensureAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const flightData = req.body;
+    
+    // Validazione dei dati minimi
+    if (!flightData || !flightData.flight || !flightData.flight.iata || !flightData.flight_date) {
+      return res.status(400).json({ message: 'Dati del volo incompleti' });
+    }
+    
+    // Crea una chiave univoca per il volo
+    const flightKey = `${flightData.flight.iata}-${flightData.flight_date}`;
+    
+    // Memorizza l'intero oggetto come JSON
+    const flightDataJson = JSON.stringify(flightData);
+    
+    // Inserisci nel database
+    db.run(
+      'INSERT INTO favorite_flights (user_id, flight_key, flight_data) VALUES (?, ?, ?)',
+      [userId, flightKey, flightDataJson],
+      function(err) {
+        if (err) {
+          // Gestisci il caso in cui il volo sia già nei preferiti (UNIQUE constraint)
+          if (err.message.includes('UNIQUE constraint failed')) {
+            return res.status(409).json({ message: 'Questo volo è già nei tuoi preferiti' });
+          }
+          
+          console.error('Errore nel salvataggio del volo preferito:', err);
+          return res.status(500).json({ message: 'Errore nel salvataggio del preferito' });
+        }
+        
+        res.status(201).json({ 
+          message: 'Volo aggiunto ai preferiti con successo',
+          id: this.lastID 
+        });
+      }
+    );
+  } catch (error) {
+    console.error('Errore nell\'endpoint POST favorites:', error);
+    res.status(500).json({ message: 'Errore interno del server' });
+  }
+});
+
+// 5. Endpoint per rimuovere un volo dai preferiti
+app.delete('/api/favorites/:flightKey', ensureAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const flightKey = req.params.flightKey;
+    
+    if (!flightKey) {
+      return res.status(400).json({ message: 'Identificativo del volo mancante' });
+    }
+    
+    // Elimina il volo preferito
+    db.run(
+      'DELETE FROM favorite_flights WHERE user_id = ? AND flight_key = ?',
+      [userId, flightKey],
+      function(err) {
+        if (err) {
+          console.error('Errore nella rimozione del volo preferito:', err);
+          return res.status(500).json({ message: 'Errore nella rimozione del preferito' });
+        }
+        
+        if (this.changes === 0) {
+          return res.status(404).json({ message: 'Volo preferito non trovato' });
+        }
+        
+        res.json({ message: 'Volo rimosso dai preferiti con successo' });
+      }
+    );
+  } catch (error) {
+    console.error('Errore nell\'endpoint DELETE favorites:', error);
+    res.status(500).json({ message: 'Errore interno del server' });
+  }
+});
+
+// 6. Endpoint per aggiornare i dati di un volo preferito (opzionale ma utile)
+app.put('/api/favorites/:flightKey', ensureAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const flightKey = req.params.flightKey;
+    const updatedFlightData = req.body;
+    
+    // Validazione dei dati
+    if (!flightKey || !updatedFlightData) {
+      return res.status(400).json({ message: 'Dati incompleti' });
+    }
+    
+    // Aggiorna i dati del volo
+    const flightDataJson = JSON.stringify(updatedFlightData);
+    
+    db.run(
+      'UPDATE favorite_flights SET flight_data = ? WHERE user_id = ? AND flight_key = ?',
+      [flightDataJson, userId, flightKey],
+      function(err) {
+        if (err) {
+          console.error('Errore nell\'aggiornamento del volo preferito:', err);
+          return res.status(500).json({ message: 'Errore nell\'aggiornamento del preferito' });
+        }
+        
+        if (this.changes === 0) {
+          return res.status(404).json({ message: 'Volo preferito non trovato' });
+        }
+        
+        res.json({ message: 'Volo preferito aggiornato con successo' });
+      }
+    );
+  } catch (error) {
+    console.error('Errore nell\'endpoint PUT favorites:', error);
+    res.status(500).json({ message: 'Errore interno del server' });
+  }
+});
 
 /**
  * @swagger
@@ -1095,6 +1230,6 @@ app.get('/admin/users/filter/email', isAdmin, async (req, res) => {
   }
 });
 
-httpServer.listen(port, () => {
+app.listen(port, () => {
   console.log(`Server in esecuzione su http://localhost:${port}`);
 });

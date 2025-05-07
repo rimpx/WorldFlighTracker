@@ -35,7 +35,7 @@
 
 <script>
 import { GoogleLogin } from 'vue3-google-login';
-import io from 'socket.io-client'; // Aggiunto import socket.io-client
+// Rimosso l'import di socket.io-client
 
 export default {
   components: {
@@ -51,25 +51,12 @@ export default {
       email: "",
       password: "",
       message: "",
-      isError: false,
-      socket: null // Aggiunta proprietà socket
+      isError: false
+      // Rimossa la proprietà socket
     };
   },
-  mounted() {
-    // Inizializza la connessione WebSocket quando il componente viene montato
-    this.socket = io('http://localhost:3000', {
-      withCredentials: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
-    });
-  },
-  beforeUnmount() {
-    // Disconnetti il socket quando il componente viene smontato
-    if (this.socket) {
-      this.socket.disconnect();
-    }
-  },
+  // Rimosso il metodo mounted() per la connessione WebSocket
+  // Rimosso il metodo beforeUnmount() per la disconnessione WebSocket
   methods: {
     toggleMode() {
       this.isLogin = !this.isLogin;
@@ -94,7 +81,10 @@ export default {
           favorite_airport: this.aeroporto_preferenza
         };
 
-        const response = await fetch("http://localhost:3000/register", {
+        // Determina l'URL base in modo dinamico
+        const apiBaseUrl = this.getApiBaseUrl();
+
+        const response = await fetch(`${apiBaseUrl}/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(userData)
@@ -119,7 +109,10 @@ export default {
           password: this.password
         };
 
-        const response = await fetch("http://localhost:3000/login", {
+        // Determina l'URL base in modo dinamico
+        const apiBaseUrl = this.getApiBaseUrl();
+
+        const response = await fetch(`${apiBaseUrl}/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(loginData),
@@ -146,10 +139,13 @@ export default {
     async handleGoogleLogin(response) {
       console.log("Token ID ricevuto:", response.credential);
       try {
-        const backendResponse = await fetch("http://localhost:3000/login/google", {
+        // Determina l'URL base in modo dinamico
+        const apiBaseUrl = this.getApiBaseUrl();
+        
+        const backendResponse = await fetch(`${apiBaseUrl}/login/google`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include", // Permette la gestione della sessione
+          credentials: "include",
           body: JSON.stringify({ token: response.credential })
         });
 
@@ -169,6 +165,23 @@ export default {
         console.error("Errore nel login con Google:", error);
         this.message = "Errore nel login con Google: " + error.message;
         this.isError = true;
+      }
+    },
+    // Nuovo metodo per determinare l'URL API base
+    getApiBaseUrl() {
+      const isHttps = window.location.protocol === 'https:';
+      
+      if (window.location.host.includes('.app.github.dev') || isHttps) {
+        const hostParts = window.location.host.split('-');
+        if (hostParts.length > 1) {
+          const portIndex = hostParts.length - 1;
+          hostParts[portIndex] = '3000';
+          return `${window.location.protocol}//${hostParts.join('-')}`;
+        } else {
+          return `${window.location.protocol}//${window.location.hostname}:3000`;
+        }
+      } else {
+        return 'http://localhost:3000';
       }
     }
   }
