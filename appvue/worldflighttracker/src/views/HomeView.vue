@@ -35,6 +35,7 @@
 
 <script>
 import { GoogleLogin } from 'vue3-google-login';
+import io from 'socket.io-client'; // Aggiunto import socket.io-client
 
 export default {
   components: {
@@ -50,8 +51,24 @@ export default {
       email: "",
       password: "",
       message: "",
-      isError: false
+      isError: false,
+      socket: null // Aggiunta proprietà socket
     };
+  },
+  mounted() {
+    // Inizializza la connessione WebSocket quando il componente viene montato
+    this.socket = io('http://localhost:3000', {
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    });
+  },
+  beforeUnmount() {
+    // Disconnetti il socket quando il componente viene smontato
+    if (this.socket) {
+      this.socket.disconnect();
+    }
   },
   methods: {
     toggleMode() {

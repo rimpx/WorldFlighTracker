@@ -85,6 +85,7 @@ const io = new Server(httpServer, {
 // Variabili globali per tracciare le connessioni
 const activeConnections = new Set(); // Traccia tutte le connessioni attive
 const adminConnections = new Set(); // Traccia solo le connessioni degli admin
+const activeUsers = new Map(); // Traccia utenti autenticati con i loro dati [socketId -> userData]
 let visitorCount = 0; // Contatore dei visitatori
 
 // Middleware per gestire la sessione utente nelle connessioni WebSocket
@@ -111,8 +112,13 @@ io.use(async (socket, next) => {
 
 // Funzione per inviare aggiornamenti agli admin
 const emitToAdmins = () => {
+  // Prepara la lista di utenti attivi per gli admin
+  const activeUsersList = Array.from(activeUsers.values());
+  const visitorCount = activeConnections.size;
+  
   adminConnections.forEach(socketId => {
     io.to(socketId).emit('admin_visitor_count', visitorCount);
+    io.to(socketId).emit('admin_active_users', activeUsersList);
   });
 };
 
@@ -122,10 +128,33 @@ io.on('connection', (socket) => {
   activeConnections.add(socket.id);
   visitorCount = activeConnections.size;
 
+  // Se l'utente è autenticato, aggiungi i suoi dati alla mappa degli utenti attivi
+  if (socket.user) {
+    activeUsers.set(socket.id, {
+      id: socket.user.id,
+      username: socket.user.username || socket.user.email,
+      email: socket.user.email,
+      is_admin: socket.user.is_admin || false,
+      socketId: socket.id,
+      connectedAt: new Date()
+    });
+  } else {
+    // Aggiungi anche utenti anonimi alla mappa
+    activeUsers.set(socket.id, {
+      id: null,
+      username: 'Visitatore anonimo',
+      email: 'N/A',
+      is_admin: false,
+      socketId: socket.id,
+      connectedAt: new Date()
+    });
+  }
+
   // Se l'utente è un admin, aggiungi la connessione alla lista degli admin
   if (socket.user?.is_admin) {
     adminConnections.add(socket.id);
     socket.emit('admin_visitor_count', visitorCount); // Invia il conteggio iniziale
+    socket.emit('admin_active_users', Array.from(activeUsers.values())); // Invia la lista iniziale
   }
 
   // Invia aggiornamenti a tutti gli admin
@@ -137,6 +166,9 @@ io.on('connection', (socket) => {
     activeConnections.delete(socket.id);
     visitorCount = activeConnections.size;
 
+    // Rimuovi l'utente dalla mappa degli utenti attivi
+    activeUsers.delete(socket.id);
+
     // Se l'utente era un admin, rimuovi la connessione dalla lista degli admin
     if (socket.user?.is_admin) {
       adminConnections.delete(socket.id);
@@ -146,7 +178,6 @@ io.on('connection', (socket) => {
     emitToAdmins();
   });
 });
-
 
 // Configurazione di Passport per il login con Google
 passport.use(new GoogleStrategy({
@@ -1000,6 +1031,69 @@ app.post('/update-airport', (req, res) => {
   );
 });
 
+// Endpoint per la creazione di un nuovo utente admin (accessibile solo agli admin)
+app.post('/admin/create', isAdmin, async (req, res) => {
+  try {
+    // Estraggo i dati dalla richiesta
+    const { username, email, password, age, favorite_airport } = req.body;
+
+    // Validazione base dei dati
+    if (!username || !email || !password || !age) {
+      return res.status(400).json({ message: 'Tutti i campi obbligatori devono essere compilati' });
+    }
+
+    // Verifica se l'email è già in uso - VERSIONE CORRETTA
+    const checkEmailQuery = 'SELECT COUNT(*) as count FROM users WHERE email = ?';
+    const emailCheck = await db.get(checkEmailQuery, [email]);
+    
+    if (emailCheck && emailCheck.count > 0) {
+      return res.status(400).json({ message: 'Email già in uso' });
+    }
+
+    // Hash della password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Inserimento del nuovo admin nel database
+    const result = await db.run(
+      'INSERT INTO users (username, email, password, age, favorite_airport, is_admin) VALUES (?, ?, ?, ?, ?, ?)',
+      [username, email, hashedPassword, age, favorite_airport || null, 1]
+    );
+
+    // Risposta con successo
+    res.status(201).json({ 
+      message: 'Amministratore creato con successo',
+      userId: result.lastID 
+    });
+  } catch (error) {
+    console.error('Errore nella creazione dell\'admin:', error);
+    res.status(500).json({ message: 'Errore durante la creazione dell\'amministratore' });
+  }
+});
+
+// Endpoint per filtrare gli utenti per email
+app.get('/admin/users/filter/email', isAdmin, async (req, res) => {
+  try {
+    // Estrae il parametro email dalla query
+    const email = req.query.email;
+    
+    if (!email) {
+      return res.status(400).json({ message: 'Parametro email mancante' });
+    }
+    
+    // Utilizza LIKE per cercare email che contengono la stringa fornita
+    // % è il jolly in SQL, quindi %string% trova qualsiasi email che contiene "string"
+    const users = await db.all(
+      'SELECT id, username, email, age, favorite_airport, is_admin FROM users WHERE email LIKE ?',
+      [`%${email}%`]
+    );
+    
+    // Ritorna gli utenti trovati
+    res.json(users);
+  } catch (error) {
+    console.error('Errore nella ricerca utenti per email:', error);
+    res.status(500).json({ message: 'Errore durante la ricerca degli utenti per email' });
+  }
+});
 
 httpServer.listen(port, () => {
   console.log(`Server in esecuzione su http://localhost:${port}`);

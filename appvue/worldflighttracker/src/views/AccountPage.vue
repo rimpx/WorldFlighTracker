@@ -1,51 +1,51 @@
 <template>
-    <div class="container">
-      <!-- Navbar riutilizzabile -->
-      <Navbar :accountName="user.username" :favoriteAirport="user.favorite_airport" />
-  
-      <!-- Contenuto principale -->
-      <div class="account-container">
-        <!-- Informazioni utente -->
-        <div class="info-section">
-          <h2>Informazioni Account</h2>
-          <ul>
-            <li><strong>Username:</strong> {{ user.username }}</li>
-            <li><strong>Email:</strong> {{ user.email }}</li>
-            <li><strong>Età:</strong> {{ user.age }}</li>
-            <li><strong>Aeroporto Preferito:</strong> {{ user.favorite_airport }}</li>
-          </ul>
-          <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
+  <div class="container">
+    <!-- Navbar riutilizzabile -->
+    <Navbar :accountName="user.username" :favoriteAirport="user.favorite_airport" />
+
+    <!-- Contenuto principale -->
+    <div class="account-container">
+      <!-- Informazioni utente -->
+      <div class="info-section">
+        <h2>Informazioni Account</h2>
+        <ul>
+          <li><strong>Username:</strong> {{ user.username }}</li>
+          <li><strong>Email:</strong> {{ user.email }}</li>
+          <li><strong>Età:</strong> {{ user.age }}</li>
+          <li><strong>Aeroporto Preferito:</strong> {{ user.favorite_airport }}</li>
+        </ul>
+        <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
+      </div>
+
+      <!-- Modifica informazioni -->
+      <div class="edit-section">
+        <h2>Modifica Informazioni</h2>
+        <div class="form-group">
+          <label for="airport">Nuovo Aeroporto Preferito</label>
+          <input v-model="updatedAirport" id="airport" placeholder="Nuovo aeroporto" />
+          <button @click="updateAirport" class="update-button">Aggiorna Aeroporto</button>
         </div>
-  
-        <!-- Modifica informazioni -->
-        <div class="edit-section">
-          <h2>Modifica Informazioni</h2>
-          <div class="form-group">
-            <label for="airport">Nuovo Aeroporto Preferito</label>
-            <input v-model="updatedAirport" id="airport" placeholder="Nuovo aeroporto" />
-            <button @click="updateAirport" class="update-button">Aggiorna Aeroporto</button>
-          </div>
-          <div class="form-group">
-            <label for="password">Nuova Password</label>
-            <input type="password" v-model="newPassword" id="password" placeholder="Nuova password" />
-          </div>
-          <div class="form-group">
-            <label for="confirmPassword">Conferma Password</label>
-            <input
-              type="password"
-              v-model="confirmPassword"
-              id="confirmPassword"
-              placeholder="Conferma password"
-            />
-            <button @click="updatePassword" class="update-button">Cambia Password</button>
-          </div>
+        <div class="form-group">
+          <label for="password">Nuova Password</label>
+          <input type="password" v-model="newPassword" id="password" placeholder="Nuova password" />
+        </div>
+        <div class="form-group">
+          <label for="confirmPassword">Conferma Password</label>
+          <input
+            type="password"
+            v-model="confirmPassword"
+            id="confirmPassword"
+            placeholder="Conferma password"
+          />
+          <button @click="updatePassword" class="update-button">Cambia Password</button>
         </div>
       </div>
     </div>
-  </template>
-  
-  <script>
-  import Navbar from "@/components/AppNavbar.vue";
+  </div>
+</template>
+
+<script>
+import Navbar from "@/components/AppNavbar.vue";
 import { fetchUserData, useAuth } from "@/composables/useAuth";
 import io from "socket.io-client"; // Importa Socket.IO
 
@@ -58,25 +58,35 @@ export default {
       newPassword: "",
       confirmPassword: "",
       successMessage: "",
-      socket: null, // Aggiungi socket come variabile
+      socket: null, // Socket.io instance
     };
   },
   async mounted() {
-    await fetchUserData();
-    this.updatedAirport = this.user.favorite_airport;
+    try {
+      await fetchUserData();
+      this.updatedAirport = this.user.favorite_airport;
 
-    // Connessione al server WebSocket
-    this.socket = io("http://localhost:3000", {
-      withCredentials: true, // Invia i cookie di sessione
-    });
-
-    // Notifica al server che l'utente è online
-    this.socket.emit("user_online");
-
-    // Gestione della disconnessione
-    this.socket.on("disconnect", () => {
-      console.log("Disconnesso dal server WebSocket");
-    });
+      // Inizializza la connessione WebSocket con opzioni di riconnessione
+      this.socket = io("http://localhost:3000", {
+        withCredentials: true, // Invia i cookie di sessione per l'autenticazione
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
+      });
+      
+      // Log della connessione stabilita
+      this.socket.on('connect', () => {
+        console.log('Connesso al server WebSocket');
+      });
+      
+      // Gestione della disconnessione
+      this.socket.on("disconnect", () => {
+        console.log("Disconnesso dal server WebSocket");
+      });
+    } catch (error) {
+      console.error("Errore nel recupero delle informazioni utente:", error);
+      alert("Errore nel recupero delle informazioni utente.");
+    }
   },
   beforeUnmount() {
     // Chiudi la connessione WebSocket quando il componente viene smontato
@@ -135,8 +145,7 @@ export default {
     },
   },
 };
-  </script>
-  
+</script>
 
 <style scoped>
 /* Stili base */
