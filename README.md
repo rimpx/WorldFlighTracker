@@ -14,8 +14,8 @@ Segui questi passaggi per configurare e avviare l'applicazione:
 - scarica i container su codespaces utilizzando l'estensione di docker o su linux
 - utilizza i seguenti comandi:
 
-`docker pull riccardorimpi/worldflighttracker:api`
-`docker pull riccardorimpi/worldflighttracker:client`
+1. `docker pull riccardorimpi/worldflighttracker:api`
+2. `docker pull riccardorimpi/worldflighttracker:client`
 
 ### 2. Avvia i container
 - Una volta scaricat, avvia i container
