@@ -4,9 +4,6 @@
         <div class="admin-header">
             <h1 class="title">PANNELLO AMMINISTRAZIONE</h1>
             <div class="header-controls">
-                <div class="visitor-counter">
-                    Visitatori online: 0
-                </div>
                 <button @click="logout" class="logout-button">LOGOUT</button>
             </div>
         </div>
@@ -29,8 +26,8 @@
                         <input id="adminPassword" v-model="newAdmin.password" type="password" placeholder="Password" class="admin-input" required />
                     </div>
                     <div class="form-group">
-                        <label for="adminAge">Età</label>
-                        <input id="adminAge" v-model="newAdmin.age" type="number" placeholder="Età" class="admin-input" required />
+                        <label for="adminAge">Età (minimo 18 anni)</label>
+                        <input id="adminAge" v-model="newAdmin.age" type="number" min="18" placeholder="Età" class="admin-input" required />
                     </div>
                     <div class="form-group">
                         <label for="adminAirport">Aeroporto Preferito</label>
@@ -127,8 +124,6 @@
 </template>
 
 <script>
-// Import di socket.io-client rimosso
-
 export default {
     name: "AdminPage",
     data() {
@@ -155,10 +150,7 @@ export default {
         // Configura l'URL dell'API
         this.configureApiBaseUrl();
         await this.fetchUsers();
-
-        // Connessione WebSocket e listener rimossi
     },
-    // beforeUnmount rimosso poiché non c'è più alcun socket da disconnettere
     methods: {
         configureApiBaseUrl() {
             // Strategia dinamica per determinare l'URL di base dell'API
@@ -169,7 +161,7 @@ export default {
                 if (hostParts.length > 1) {
                     const portIndex = hostParts.length - 1;
                     hostParts[portIndex] = '3000';
-                    this.apiBaseUrl = `${window.location.protocol}//${hostParts.join('-')}`;
+                    this.apiBaseUrl = `${window.location.protocol}//${hostParts.join('-')}.app.github.dev`;
                 } else {
                     this.apiBaseUrl = `${window.location.protocol}//${window.location.hostname}:3000`;
                 }
@@ -294,6 +286,14 @@ export default {
                 return;
             }
 
+            // Validazione specifica per l'età (minimo 18 anni)
+            const age = parseInt(this.newAdmin.age);
+            if (isNaN(age) || age < 18) {
+                this.message = "L'età minima richiesta per un admin è 18 anni";
+                this.isError = true;
+                return;
+            }
+
             try {
                 const response = await fetch(`${this.apiBaseUrl}/admin/create`, {
                     method: "POST",
@@ -303,7 +303,7 @@ export default {
                         username: this.newAdmin.username,
                         email: this.newAdmin.email,
                         password: this.newAdmin.password,
-                        age: this.newAdmin.age,
+                        age: parseInt(this.newAdmin.age), // Assicuriamoci che sia un numero
                         favorite_airport: this.newAdmin.favorite_airport
                     })
                 });
@@ -355,6 +355,7 @@ export default {
 </script>
 
 <style scoped>
+/* Gli stili rimangono invariati */
 .container {
     min-height: 100vh;
     background-color: #1a1a1a;

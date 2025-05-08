@@ -176,7 +176,7 @@ export default {
         if (hostParts.length > 1) {
           const portIndex = hostParts.length - 1;
           hostParts[portIndex] = '3000';
-          return `${window.location.protocol}//${hostParts.join('-')}`;
+          return `${window.location.protocol}//${hostParts.join('-')}.app.github.dev`;
         } else {
           return `${window.location.protocol}//${window.location.hostname}:3000`;
         }

@@ -13,7 +13,6 @@
 
       <!-- Current Flight Details -->
       <div v-if="flightDetails" class="flight-details">
-        <!-- Contenuto invariato -->
         <div class="card current-flight">
           <div class="card-header">
             <h3>Volo {{ flightDetails.flight.iata }} ({{ flightDetails.airline.name }})</h3>
@@ -26,7 +25,42 @@
             </button>
           </div>
           <div class="grid">
-            <!-- Contenuto invariato -->
+            <!-- Dettagli di partenza -->
+            <div class="departure-details">
+              <strong>Partenza</strong>
+              <p class="airport">{{ flightDetails.departure.airport }}</p>
+              <p class="code">{{ flightDetails.departure.iata }}</p>
+              <p class="time">{{ formatDateTime(flightDetails.departure.scheduled) }}</p>
+              <p>Terminal: {{ flightDetails.departure.terminal || 'N/A' }}</p>
+              <p>Gate: {{ flightDetails.departure.gate || 'N/A' }}</p>
+            </div>
+
+            <!-- Dettagli di arrivo -->
+            <div class="arrival-details">
+              <strong>Arrivo</strong>
+              <p class="airport">{{ flightDetails.arrival.airport }}</p>
+              <p class="code">{{ flightDetails.arrival.iata }}</p>
+              <p class="time">{{ formatDateTime(flightDetails.arrival.scheduled) }}</p>
+              <p>Terminal: {{ flightDetails.arrival.terminal || 'N/A' }}</p>
+              <p>Gate: {{ flightDetails.arrival.gate || 'N/A' }}</p>
+            </div>
+            
+            <!-- Stato volo -->
+            <div class="flight-status">
+              <strong>Stato Volo</strong>
+              <p :class="statusClass(flightDetails)">
+                {{ flightDetails.flight_status === 'landed' ? 'Atterrato' : 
+                   flightDetails.flight_status === 'active' ? 'In Volo' : 'Programmato' }}
+              </p>
+              <p>Data volo: {{ formatDateTime(flightDetails.flight_date) }}</p>
+            </div>
+
+            <!-- Info aeromobile -->
+            <div class="aircraft-info">
+              <strong>Aeromobile</strong>
+              <p>Modello: {{ flightDetails.aircraft?.icao || 'N/A' }}</p>
+              <p>Registrazione: {{ flightDetails.aircraft?.registration || 'N/A' }}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -39,7 +73,39 @@
 
       <!-- Favorite Flights Section -->
       <div v-if="favoriteFlights.length > 0" class="favorites-section">
-        <!-- Contenuto invariato -->
+        <h2 class="section-title">I Tuoi Voli Preferiti</h2>
+        <div class="favorites-grid">
+          <div class="favorite-card" v-for="favorite in favoriteFlights" :key="getFavoriteKey(favorite)">
+            <div class="favorite-card-header">
+              <h3>{{ favorite.flight.iata }}</h3>
+              <button @click="toggleFavorite(favorite)" class="remove-favorite">
+                ×
+              </button>
+            </div>
+            <div class="favorite-details">
+              <div class="favorite-route">
+                <span class="airport-code">{{ favorite.departure.iata }}</span>
+                <span class="route-arrow">→</span>
+                <span class="airport-code">{{ favorite.arrival.iata }}</span>
+              </div>
+              <div class="favorite-status">
+                <span :class="statusClass(favorite)">
+                  {{ favorite.flight_status === 'landed' ? 'Atterrato' : 
+                     favorite.flight_status === 'active' ? 'In Volo' : 'Programmato' }}
+                </span>
+                <span class="flight-date">{{ formatDateTime(favorite.flight_date).split(' ')[0] }}</span>
+              </div>
+              <div class="favorite-times">
+                <span>{{ formatTime(favorite.departure.scheduled) }}</span>
+                <span class="time-separator">-</span>
+                <span>{{ formatTime(favorite.arrival.scheduled) }}</span>
+              </div>
+            </div>
+            <button @click="loadFavoriteDetails(favorite)" class="view-details-button">
+              Visualizza Dettagli
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- No favorites message -->
@@ -104,7 +170,7 @@ export default {
         if (hostParts.length > 1) {
           const portIndex = hostParts.length - 1;
           hostParts[portIndex] = '3000';
-          this.apiBaseUrl = `${window.location.protocol}//${hostParts.join('-')}`;
+          this.apiBaseUrl = `${window.location.protocol}//${hostParts.join('-')}.app.github.dev`;
         } else {
           this.apiBaseUrl = `${window.location.protocol}//${window.location.hostname}:3000`;
         }

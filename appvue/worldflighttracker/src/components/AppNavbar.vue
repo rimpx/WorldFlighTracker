@@ -38,12 +38,44 @@ export default {
   name: "AppNavbar",
   props: ["accountName", "favoriteAirport"],
   methods: {
+    // Funzione per determinare dinamicamente l'URL base dell'API
+    getApiBaseUrl() {
+      // Se siamo in GitHub Codespaces
+      if (window.location.host.includes('.app.github.dev')) {
+        // Estrai il prefisso del nome host
+        const prefix = window.location.host.split('-')[0];
+        // Costruisci l'URL completo per Codespaces
+        return `${window.location.protocol}//${prefix}-3000.app.github.dev`;
+      } else {
+        // URL di sviluppo locale predefinito
+        return 'http://localhost:3000';
+      }
+    },
+    
     async logout() {
-      const response = await fetch("http://localhost:3000/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-      if (response.ok) {
+      try {
+        const apiBaseUrl = this.getApiBaseUrl();
+        console.log(`Esecuzione logout su: ${apiBaseUrl}/logout`);
+        
+        const response = await fetch(`${apiBaseUrl}/logout`, {
+          method: "POST",
+          credentials: "include",
+        });
+        
+        if (response.ok) {
+          sessionStorage.clear();
+          localStorage.removeItem("user-token");
+          this.$router.push("/");
+        } else {
+          console.error(`Errore durante il logout: ${response.status}`);
+          // Forza comunque il logout sul client anche in caso di errore dal server
+          sessionStorage.clear();
+          localStorage.removeItem("user-token");
+          this.$router.push("/");
+        }
+      } catch (error) {
+        console.error("Errore durante il logout:", error);
+        // Forza comunque il logout sul client in caso di errore
         sessionStorage.clear();
         localStorage.removeItem("user-token");
         this.$router.push("/");

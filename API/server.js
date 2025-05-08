@@ -39,13 +39,35 @@ const sessionStore = new SQLiteStore({
 });
 
 // Middleware
+// Middleware
 app.use(express.json());
+
+// Nuova configurazione CORS che accetta anche dominio GitHub Codespaces
 app.use(
   cors({
-    origin: ['http://localhost:8080', 'https://www.rimpici.it'], // Permetti localhost e produzione
+    // Include anche i domini di GitHub Codespaces 
+    origin: function(origin, callback) {
+      const allowedOrigins = [
+        'http://localhost:8080',
+        'https://www.rimpici.it'
+      ];
+      
+      // Accetta qualsiasi origine che contiene .app.github.dev
+      if (!origin || origin.includes('.app.github.dev') || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        console.log('Origine bloccata da CORS:', origin);
+        callback(new Error('Non permesso da CORS'));
+      }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
   })
 );
+
+// Gestione esplicita delle richieste preflight OPTIONS
+app.options('*', cors());
 
 app.use(
   session({

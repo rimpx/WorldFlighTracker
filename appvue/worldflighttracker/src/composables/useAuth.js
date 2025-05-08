@@ -3,15 +3,38 @@ import { ref } from "vue";
 const user = ref({});
 const isAuthenticated = ref(false);
 
+/**
+ * Determina dinamicamente l'URL base dell'API
+ * @returns {string} URL base dell'API
+ */
+function getApiBaseUrl() {
+  const isHttps = window.location.protocol === 'https:';
+  
+  if (window.location.host.includes('.app.github.dev') || isHttps) {
+    const hostParts = window.location.host.split('-');
+    if (hostParts.length > 1) {
+      const portIndex = hostParts.length - 1;
+      hostParts[portIndex] = '3000';
+      return `${window.location.protocol}//${hostParts.join('-')}.app.github.dev`;
+    } else {
+      return `${window.location.protocol}//${window.location.hostname}:3000`;
+    }
+  } else {
+    return 'http://localhost:3000';
+  }
+}
+
 export async function fetchUserData() {
     try {
-        const response = await fetch("http://localhost:3000/session", {
+        // Usa l'URL base dinamico
+        const apiBaseUrl = getApiBaseUrl();
+        const response = await fetch(`${apiBaseUrl}/session`, {
             method: "GET",
             credentials: "include",
         });
         const data = await response.json();
 
-        console.log("Risposta session:", data); // Log dettagliato della risposta
+        console.log("Risposta session:", data, "da URL:", `${apiBaseUrl}/session`);
 
         if (data.isAuthenticated) {
             user.value = data.user;
@@ -55,5 +78,5 @@ export function resetUserData() {
  * Hook per accedere ai dati di autenticazione.
  */
 export function useAuth() {
-    return { user, isAuthenticated, fetchUserData, isAdmin, resetUserData };
+    return { user, isAuthenticated, fetchUserData, isAdmin, resetUserData, getApiBaseUrl };
 }
