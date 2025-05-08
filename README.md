@@ -13,6 +13,7 @@ Segui questi passaggi per configurare e avviare l'applicazione:
 ### 1. Scarica i container
 - scarica i container su codespaces utilizzando l'estensione di docker o su linux
 - utilizza i seguenti comandi:
+
 `docker pull riccardorimpi/worldflighttracker:api`
 `docker pull riccardorimpi/worldflighttracker:client`
 
@@ -32,7 +33,7 @@ Segui questi passaggi per configurare e avviare l'applicazione:
 - Inerire nella barra di ricerca volo il codice del volo da cercare come FR3666
 
 ### 7. Visualizzazione swagger
-- Scrivere nella barra di ricerca l'indirizzo del backend (con la porta 3000) e aggiungere in fondo /api-docs/
+- Scrivere nella barra di ricerca l'indirizzo del backend (con la porta 3000) e aggiungere in fondo `/api-docs/`
 
 ## Slogan
 **"Le informazioni di volo che desideri, sempre a portata di mano"**
