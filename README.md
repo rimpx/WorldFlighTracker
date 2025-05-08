@@ -4,7 +4,7 @@
 **WorldFlightTracker**
 
 ## Descrizione
-WorldFlightTracker è una piattaforma che permette di monitorare informazioni sui voli in tutti gli aeroporti del mondo, fornendo aggiornamenti in tempo reale su gate, orari, ritardi e durata del tragitto. Grazie a un'interfaccia intuitiva, è accessibile da qualsiasi dispositivo. Inoltre, consente agli utenti di condividere recensioni e esperienze, creando una community di viaggiatori con feedback reali.
+WorldFlightTracker è una piattaforma che permette di monitorare informazioni sui voli in tutti gli aeroporti del mondo, fornendo aggiornamenti in tempo reale su gate, orari, ritardi e durata del tragitto. Grazie a un'interfaccia intuitiva, è accessibile da qualsiasi dispositivo. Il tuo volo a portata di mano!
 
 ## Istruzioni per l'uso
 
